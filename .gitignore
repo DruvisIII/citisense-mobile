@@ -43,3 +43,18 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# PHP backend credentials
+**/config.php
+
+# Resident uploads
+/uploads/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+#testing files
+/api/test_api.php
+/api/test_connection.php
