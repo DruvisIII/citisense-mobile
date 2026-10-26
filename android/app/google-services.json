@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "1067280476980",
+    "project_id": "citisense-7d9f3",
+    "storage_bucket": "citisense-7d9f3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1067280476980:android:384b9f1d5f42cd5b195361",
+        "android_client_info": {
+          "package_name": "com.example.citisense"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1067280476980-k9sdjlligr08c37oj5h0uunaj6f68guo.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.citisense",
+            "certificate_hash": "0d87f4adf7ef41a1e7ab9c87d64598ff69f3095f"
+          }
+        },
+        {
+          "client_id": "1067280476980-1o7igtkebhjvtfbunqffeld1mbsq7m4j.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDECDRQ4Srtxz8MAUe_9ezq_t84h0gg0go"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1067280476980-1o7igtkebhjvtfbunqffeld1mbsq7m4j.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
