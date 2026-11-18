@@ -3,13 +3,17 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'dart:async';
+import 'package:firebase_messaging/firebase_messaging.dart';
+
 const Color primaryBlue = Color(0xFF5887E0);
 const Color darkBlue = Color(0xFF172D68);
 const Color textGrey = Color(0xFF596887);
 
-const String apiBaseUrl =
-    //'http://192.168.1.48/citisense/api/';
-    'http://10.127.214.252/citisense/api/';
+const String apiBaseUrl = 'http://192.168.1.20/citisense/api/';
+//'http://192.168.1.48/citisense/api/';
+//'http://10.127.214.252/citisense/api/';
+//'http://192.168.83.252/citisense/api/';
 
 class NotificationPage extends StatefulWidget {
   final String userID;
@@ -25,7 +29,8 @@ class NotificationPage extends StatefulWidget {
   State<NotificationPage> createState() => _NotificationPageState();
 }
 
-class _NotificationPageState extends State<NotificationPage> {
+class _NotificationPageState extends State<NotificationPage>
+    with WidgetsBindingObserver {
   String selectedTab = 'all';
 
   bool isLoading = true;
@@ -34,14 +39,59 @@ class _NotificationPageState extends State<NotificationPage> {
 
   List<Map<String, dynamic>> notifications = [];
 
+  StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
+  StreamSubscription<RemoteMessage>? _openedAppSubscription;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     fetchNotifications();
+
+    // This is a second listener, only to reload the in-app list.
+    // The existing push notification service can still display the popup.
+    _foregroundMessageSubscription = FirebaseMessaging.onMessage.listen(
+      _onFirebaseMessage,
+    );
+    _openedAppSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
+      _onFirebaseMessage,
+    );
+  }
+
+  void _onFirebaseMessage(RemoteMessage message) {
+    if (!mounted || message.data['type'] != 'report_status') return;
+    // Read fresh notifications from MySQL instead of trusting push text.
+    fetchNotifications(showLoading: false);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      // Covers messages received while the app was in the background.
+      fetchNotifications(showLoading: false);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant NotificationPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userID != widget.userID ||
+        oldWidget.barangayID != widget.barangayID) {
+      fetchNotifications(showLoading: false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _foregroundMessageSubscription?.cancel();
+    _openedAppSubscription?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   // Retrieve report notifications and barangay announcements.
-  Future<void> fetchNotifications() async {
+  // Background refreshes keep the current cards visible while loading.
+  Future<void> fetchNotifications({bool showLoading = true}) async {
     if (widget.userID.trim().isEmpty || widget.barangayID.trim().isEmpty) {
       setState(() {
         isLoading = false;
@@ -51,7 +101,7 @@ class _NotificationPageState extends State<NotificationPage> {
     }
 
     setState(() {
-      isLoading = true;
+      if (showLoading) isLoading = true;
       errorMessage = null;
     });
 
@@ -387,7 +437,7 @@ class _NotificationPageState extends State<NotificationPage> {
         borderRadius: BorderRadius.circular(23),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF253F7A).withOpacity(0.07),
+            color: const Color(0xFF253F7A).withValues(alpha: 0.07),
             blurRadius: 16,
             offset: const Offset(0, 5),
           ),
@@ -538,7 +588,7 @@ class _NotificationPageState extends State<NotificationPage> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(18, 5, 18, 24),
         itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 11),
+        separatorBuilder: (context, index) => const SizedBox(height: 11),
         itemBuilder: (context, index) => _buildNotificationCard(items[index]),
       ),
     );
@@ -583,7 +633,7 @@ class _NotificationPageState extends State<NotificationPage> {
             borderRadius: BorderRadius.circular(22),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF294C8C).withOpacity(0.07),
+                color: const Color(0xFF294C8C).withValues(alpha: 0.07),
                 blurRadius: 14,
                 offset: const Offset(0, 5),
               ),

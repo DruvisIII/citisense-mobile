@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -28,9 +30,10 @@ class MyReportsPage extends StatefulWidget {
 
 class _MyReportsPageState extends State<MyReportsPage> {
   static const String _getReportsUrl =
-      // 'http://192.168.1.48/citisense/api/get_my_reports.php';
-      'http://10.127.214.252/citisense/api/get_my_reports.php';
-
+      'http://192.168.1.20/citisense/api/get_my_reports.php';
+  //'http://192.168.1.48/citisense/api/get_my_reports.php';
+  // 'http://10.127.214.252/citisense/api/get_my_reports.php';
+  //'http://192.168.83.252/citisense/api/get_my_reports.php';
   int _selectedFilter = 1;
   String _searchQuery = '';
   bool _newestFirst = true;
@@ -38,77 +41,154 @@ class _MyReportsPageState extends State<MyReportsPage> {
   bool _isLoading = true;
   String? _errorMessage;
 
+  Timer? _refreshTimer;
+  StreamSubscription<RemoteMessage>? _foregroundMessages;
+  StreamSubscription<RemoteMessage>? _openedMessages;
+  bool _refreshInProgress = false;
+  bool _appIsActive = true;
+
   List<Map<String, dynamic>> _reports = [];
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(_lifecycleObserver);
+    _loadReports(showLoading: true);
 
-    _loadReports();
-  }
-
-  Future<void> _loadReports() async {
-    if (!mounted) return;
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
+    // Poll while the Android app is active. This also works if the admin
+    // endpoint updates the database without sending an FCM notification.
+    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted && _appIsActive) {
+        _loadReports();
+      }
     });
 
+    // A delivered Firebase message triggers an immediate server refresh.
+    _foregroundMessages = FirebaseMessaging.onMessage.listen((message) {
+      debugPrint('My Reports: foreground FCM ${message.messageId}');
+      _loadReports();
+    });
+    _openedMessages = FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      debugPrint('My Reports: notification opened ${message.messageId}');
+      _loadReports();
+    });
+  }
+
+  // Using a dedicated observer keeps the state lifecycle handling simple.
+  late final WidgetsBindingObserver _lifecycleObserver =
+      _MyReportsLifecycleObserver((state) {
+        if (!mounted) return;
+        _appIsActive = state == AppLifecycleState.resumed;
+        if (_appIsActive) _loadReports();
+      });
+
+  @override
+  void didUpdateWidget(covariant MyReportsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userID != widget.userID) {
+      _reports = [];
+      _errorMessage = null;
+      _loadReports(showLoading: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    _foregroundMessages?.cancel();
+    _openedMessages?.cancel();
+    WidgetsBinding.instance.removeObserver(_lifecycleObserver);
+    super.dispose();
+  }
+
+  Future<void> _loadReports({bool showLoading = false}) async {
+    // Avoid overlapping requests when polling, pulling to refresh and
+    // receiving a push notification happen at roughly the same time.
+    if (!mounted || _refreshInProgress) return;
+    _refreshInProgress = true;
+
+    if (showLoading && _reports.isEmpty) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
+
     try {
+      final requestUserID = widget.userID;
       final uri = Uri.parse(
-        '$_getReportsUrl?userID=${Uri.encodeComponent(widget.userID)}',
-      );
+        _getReportsUrl,
+      ).replace(queryParameters: {'userID': requestUserID});
+      final response = await http
+          .get(uri, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 10));
 
-      final response = await http.get(
-        uri,
-        headers: {'Accept': 'application/json'},
-      );
-
-      debugPrint('My Reports status: ${response.statusCode}');
-      debugPrint('My Reports response: ${response.body}');
-
+      debugPrint('My Reports refresh: HTTP ${response.statusCode}');
       if (response.statusCode != 200) {
         throw Exception('Server returned status code ${response.statusCode}');
       }
 
       final decoded = jsonDecode(response.body);
-
-      if (decoded['success'] != true) {
-        throw Exception(decoded['message'] ?? 'Unable to load reports.');
+      if (decoded is! Map<String, dynamic> || decoded['success'] != true) {
+        throw Exception('Server could not load reports');
       }
 
-      final List<dynamic> data = decoded['data'] ?? [];
-
-      final loadedReports = data
-          .map<Map<String, dynamic>>((item) => Map<String, dynamic>.from(item))
+      final rawData = decoded['data'];
+      if (rawData is! List) {
+        throw const FormatException('Expected a list of reports');
+      }
+      final loadedReports = rawData
+          .map<Map<String, dynamic>>(
+            (item) => Map<String, dynamic>.from(item as Map),
+          )
           .toList();
 
-      if (!mounted) return;
-
+      if (!mounted || requestUserID != widget.userID) return;
       setState(() {
         _reports = loadedReports;
         _isLoading = false;
+        _errorMessage = null;
       });
     } catch (e) {
-      debugPrint('Error loading reports: $e');
-
+      debugPrint('My Reports refresh failed: $e');
       if (!mounted) return;
-
+      // Keep already loaded reports instead of blanking the page during
+      // a temporary network interruption.
       setState(() {
-        _reports = [];
         _isLoading = false;
-        _errorMessage = 'Unable to load your reports.';
+        if (_reports.isEmpty) {
+          _errorMessage = 'Unable to load your reports.';
+        }
       });
+    } finally {
+      _refreshInProgress = false;
     }
+  }
+
+  // A report becomes overdue when its deadline has passed and it is
+  // still Pending or In Progress. Completed reports are never overridden.
+  String _getEffectiveStatusID(Map<String, dynamic> report) {
+    final statusID = report['statusID']?.toString() ?? '';
+    if (statusID == 'STAT001' || statusID == 'STAT002') {
+      final timeline = DateTime.tryParse(
+        (report['timeline']?.toString() ?? '').replaceFirst(' ', 'T'),
+      );
+      if (timeline != null && DateTime.now().isAfter(timeline)) {
+        return 'STAT004';
+      }
+    }
+    return statusID;
   }
 
   List<Map<String, dynamic>> get _filteredReports {
     final filtered = _reports.where((report) {
-      final status = report['statusID']?.toString() ?? '';
+      final status = _getEffectiveStatusID(report);
       final matchesStatus =
           _selectedFilter == 0 ||
-          (_selectedFilter == 1 && status == 'STAT001') ||
+          (_selectedFilter == 1 &&
+              (status == 'STAT001' ||
+                  status == 'STAT002' ||
+                  status == 'STAT004')) ||
           (_selectedFilter == 2 && status == 'STAT003');
       final query = _searchQuery.trim().toLowerCase();
       final matchesSearch =
@@ -216,10 +296,10 @@ class _MyReportsPageState extends State<MyReportsPage> {
     }
 
     if (imagePath.startsWith('/')) {
-      return 'http://192.168.1.48/citisense$imagePath';
+      return 'http://192.168.1.20/citisense$imagePath';
     }
 
-    return 'http://192.168.1.48/citisense/$imagePath';
+    return 'http://192.168.1.20/citisense/$imagePath';
   }
 
   String _formatDate(String? value) {
@@ -279,7 +359,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
   }
 
   String _getStatusText(Map<String, dynamic> report) {
-    final statusID = report['statusID']?.toString() ?? '';
+    final statusID = _getEffectiveStatusID(report);
 
     switch (statusID) {
       case 'STAT001':
@@ -291,13 +371,16 @@ class _MyReportsPageState extends State<MyReportsPage> {
       case 'STAT003':
         return 'COMPLETE';
 
+      case 'STAT004':
+        return 'OVERDUE';
+
       default:
         return report['displayStatus']?.toString().toUpperCase() ?? 'UNKNOWN';
     }
   }
 
   Color _getStatusColor(Map<String, dynamic> report) {
-    final statusID = report['statusID']?.toString() ?? '';
+    final statusID = _getEffectiveStatusID(report);
 
     switch (statusID) {
       case 'STAT001':
@@ -309,18 +392,22 @@ class _MyReportsPageState extends State<MyReportsPage> {
       case 'STAT003':
         return const Color(0xFF2CA45A);
 
+      case 'STAT004':
+        return const Color(0xFFD64545);
+
       default:
         return textGrey;
     }
   }
 
-  void _openReportDetails(Map<String, dynamic> report) {
-    Navigator.push(
+  Future<void> _openReportDetails(Map<String, dynamic> report) async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ReportDetailsPage(report: report),
       ),
     );
+    if (mounted) await _loadReports();
   }
 
   @override
@@ -579,7 +666,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.045),
+            color: Colors.black.withValues(alpha: .045),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -637,7 +724,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                 borderRadius: BorderRadius.circular(17),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(.035),
+                    color: Colors.black.withValues(alpha: .035),
                     blurRadius: 9,
                   ),
                 ],
@@ -678,7 +765,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                 borderRadius: BorderRadius.circular(17),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(.04),
+                    color: Colors.black.withValues(alpha: .04),
                     blurRadius: 9,
                   ),
                 ],
@@ -713,7 +800,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
           borderRadius: BorderRadius.circular(22),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(.05),
+              color: Colors.black.withValues(alpha: .05),
               blurRadius: 11,
               offset: const Offset(0, 4),
             ),
@@ -751,7 +838,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: categoryColor.withOpacity(.09),
+                            color: categoryColor.withValues(alpha: .09),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
@@ -774,7 +861,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: statusColor.withOpacity(.11),
+                          color: statusColor.withValues(alpha: .11),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
@@ -887,7 +974,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
     String message;
 
     if (_selectedFilter == 1) {
-      message = 'You have no pending reports.';
+      message = 'You have no ongoing reports.';
     } else if (_selectedFilter == 2) {
       message = 'You have no completed reports.';
     } else {
@@ -1066,8 +1153,36 @@ class ReportDetailsPage extends StatelessWidget {
     }
   }
 
+  String _formatTimeline() {
+    final value = report['timeline']?.toString();
+    if (value == null || value.trim().isEmpty) {
+      return 'No timeline set';
+    }
+
+    final normalized = value.replaceFirst(' ', 'T');
+    final date = DateTime.tryParse(normalized);
+    if (date == null) {
+      return value;
+    }
+
+    return '${_formatDate(date.toIso8601String())}  •  '
+        '${_formatTime(date.toIso8601String())}';
+  }
+
+  String _getEffectiveStatusID() {
+    final statusID = report['statusID']?.toString() ?? '';
+    if (statusID == 'STAT001' || statusID == 'STAT002') {
+      final value = report['timeline']?.toString() ?? '';
+      final timeline = DateTime.tryParse(value.replaceFirst(' ', 'T'));
+      if (timeline != null && DateTime.now().isAfter(timeline)) {
+        return 'STAT004';
+      }
+    }
+    return statusID;
+  }
+
   String _getStatusText() {
-    switch (report['statusID']?.toString()) {
+    switch (_getEffectiveStatusID()) {
       case 'STAT001':
         return 'PENDING';
 
@@ -1077,13 +1192,16 @@ class ReportDetailsPage extends StatelessWidget {
       case 'STAT003':
         return 'COMPLETE';
 
+      case 'STAT004':
+        return 'OVERDUE';
+
       default:
         return report['displayStatus']?.toString().toUpperCase() ?? 'UNKNOWN';
     }
   }
 
   Color _getStatusColor() {
-    switch (report['statusID']?.toString()) {
+    switch (_getEffectiveStatusID()) {
       case 'STAT001':
         return const Color(0xFFE59B24);
 
@@ -1092,6 +1210,9 @@ class ReportDetailsPage extends StatelessWidget {
 
       case 'STAT003':
         return const Color(0xFF2CA45A);
+
+      case 'STAT004':
+        return const Color(0xFFD64545);
 
       default:
         return textGrey;
@@ -1162,7 +1283,7 @@ class ReportDetailsPage extends StatelessWidget {
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.10),
+                  color: statusColor.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(9),
                 ),
                 child: Text(
@@ -1239,6 +1360,17 @@ class ReportDetailsPage extends StatelessWidget {
                 icon: Icons.access_time_outlined,
                 title: 'Time Reported',
                 value: _formatTime(report['dateReported']?.toString()),
+              ),
+
+              const SizedBox(height: 15),
+
+              // ------------------------------------------------
+              // RESOLUTION TIMELINE
+              // ------------------------------------------------
+              _buildDetailRow(
+                icon: Icons.event_available_outlined,
+                title: 'Resolution Timeline',
+                value: _formatTimeline(),
               ),
 
               const SizedBox(height: 25),
@@ -1354,5 +1486,16 @@ class ReportDetailsPage extends StatelessWidget {
         child: Icon(Icons.image_outlined, size: 55, color: primaryBlue),
       ),
     );
+  }
+}
+
+// Relays Android application lifecycle changes to the My Reports screen.
+class _MyReportsLifecycleObserver extends WidgetsBindingObserver {
+  _MyReportsLifecycleObserver(this.onChanged);
+  final void Function(AppLifecycleState) onChanged;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    onChanged(state);
   }
 }

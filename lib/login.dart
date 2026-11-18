@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'package:citisense/barangaySelection.dart';
 import 'package:citisense/home.dart';
@@ -18,15 +20,21 @@ class _LoginPageState extends State<LoginPage> {
   // API URL
   // ------------------------------------------------------------
 
-  static const String _loginUrl =
-      //'http://192.168.1.48/citisense/api/login.php';
-      'http://10.127.214.252/citisense/api/login.php';
+  static const String _loginUrl = 'http://192.168.1.20/citisense/api/login.php';
+  //'http://192.168.1.48/citisense/api/login.php';
+  //'http://10.127.214.252/citisense/api/login.php';
+  //'http://192.168.83.252/citisense/api/login.php';
+  // If your PC's IP changes, update the URL above.
+
+  // Diagnostic switch: set to false only temporarily to test whether
+  // sending an FCM token causes login.php to stall.
+  static const bool _includeFcmTokenInLogin = true;
+
   // ------------------------------------------------------------
   // CONTROLLERS
   // ------------------------------------------------------------
 
   final TextEditingController _emailController = TextEditingController();
-
   final TextEditingController _passwordController = TextEditingController();
 
   // ------------------------------------------------------------
@@ -44,7 +52,6 @@ class _LoginPageState extends State<LoginPage> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
-
     super.dispose();
   }
 
@@ -54,7 +61,6 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _login() async {
     final String email = _emailController.text.trim();
-
     final String password = _passwordController.text;
 
     // ----------------------------------------------------------
@@ -65,7 +71,6 @@ class _LoginPageState extends State<LoginPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter your email and password.')),
       );
-
       return;
     }
 
@@ -77,7 +82,6 @@ class _LoginPageState extends State<LoginPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid email address.')),
       );
-
       return;
     }
 
@@ -87,14 +91,75 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       // --------------------------------------------------------
+      // GET FIREBASE CLOUD MESSAGING TOKEN
+      // --------------------------------------------------------
+
+      String? fcmToken;
+
+      if (_includeFcmTokenInLogin) {
+        try {
+          debugPrint('[LOGIN] Retrieving FCM token...');
+          fcmToken = await FirebaseMessaging.instance.getToken().timeout(
+            const Duration(seconds: 5),
+          );
+          debugPrint(
+            '[LOGIN] FCM token available: ${fcmToken != null && fcmToken.isNotEmpty}',
+          );
+        } on TimeoutException {
+          debugPrint(
+            '[LOGIN] FCM token retrieval timed out; continuing login.',
+          );
+        } catch (e) {
+          debugPrint('[LOGIN] FCM token unavailable; continuing login: $e');
+        }
+      }
+
+      // --------------------------------------------------------
       // SEND LOGIN REQUEST TO PHP API
       // --------------------------------------------------------
 
-      final response = await http.post(
-        Uri.parse(_loginUrl),
-        headers: {'Accept': 'application/json'},
-        body: {'email': email, 'password': password},
+      final Map<String, String> loginData = {
+        'email': email,
+        'password': password,
+      };
+
+      if (_includeFcmTokenInLogin && fcmToken != null && fcmToken.isNotEmpty) {
+        loginData['fcmToken'] = fcmToken;
+      }
+
+      // Never print the password or the actual FCM token.
+      final requestTimer = Stopwatch()..start();
+      debugPrint('[LOGIN] Sending POST to $_loginUrl');
+      debugPrint(
+        '[LOGIN] Including FCM token: ${loginData.containsKey('fcmToken')}',
       );
+
+      late final http.Response response;
+      try {
+        response = await http
+            .post(
+              Uri.parse(_loginUrl),
+              headers: {'Accept': 'application/json'},
+              body: loginData,
+            )
+            .timeout(const Duration(seconds: 20));
+        debugPrint(
+          '[LOGIN] HTTP status: ${response.statusCode} '
+          'after ${requestTimer.elapsedMilliseconds}ms',
+        );
+      } on TimeoutException {
+        debugPrint(
+          '[LOGIN] PHP HTTP POST timed out after '
+          '${requestTimer.elapsedMilliseconds}ms. '
+          'FCM included: ${loginData.containsKey('fcmToken')}',
+        );
+        throw TimeoutException(
+          'The login server did not respond within 20 seconds. '
+          'Check login.php and your Apache error log.',
+        );
+      } finally {
+        requestTimer.stop();
+      }
 
       // --------------------------------------------------------
       // CHECK HTTP STATUS
@@ -110,6 +175,10 @@ class _LoginPageState extends State<LoginPage> {
 
       final decoded = jsonDecode(response.body);
 
+      if (decoded is! Map<String, dynamic>) {
+        throw Exception('Invalid response received from server.');
+      }
+
       // --------------------------------------------------------
       // LOGIN FAILED
       // --------------------------------------------------------
@@ -123,7 +192,9 @@ class _LoginPageState extends State<LoginPage> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(decoded['message'] ?? 'Incorrect email or password.'),
+            content: Text(
+              decoded['message']?.toString() ?? 'Incorrect email or password.',
+            ),
           ),
         );
 
@@ -141,17 +212,11 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       final String? userID = userData['userID']?.toString();
-
       final String? firstName = userData['firstName']?.toString();
-
       final String? lastName = userData['lastName']?.toString();
-
       final String? userEmail = userData['email']?.toString();
-
       final String? contactNo = userData['contactNo']?.toString();
-
       final String? profilePic = userData['profilePic']?.toString();
-
       final String? barangayID = userData['barangayID']?.toString();
 
       // --------------------------------------------------------
@@ -218,11 +283,11 @@ class _LoginPageState extends State<LoginPage> {
           ),
         ),
       );
-    }
-    // ----------------------------------------------------------
-    // OTHER ERRORS
-    // ----------------------------------------------------------
-    catch (e) {
+    } catch (e) {
+      // --------------------------------------------------------
+      // OTHER ERRORS
+      // --------------------------------------------------------
+
       if (!mounted) return;
 
       setState(() {
@@ -253,7 +318,6 @@ class _LoginPageState extends State<LoginPage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-
         leading: IconButton(
           icon: const Icon(
             Icons.arrow_back_ios_new,
@@ -324,31 +388,24 @@ class _LoginPageState extends State<LoginPage> {
                 TextField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-
                   style: const TextStyle(fontFamily: 'Biennale', fontSize: 14),
-
                   decoration: InputDecoration(
                     hintText: 'Enter your email',
-
                     hintStyle: const TextStyle(
                       fontFamily: 'Biennale',
                       fontSize: 14,
                       color: Colors.grey,
                     ),
-
                     prefixIcon: const Icon(
                       Icons.email_outlined,
                       color: Colors.blueGrey,
                     ),
-
                     filled: true,
                     fillColor: Colors.white,
-
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: const BorderSide(color: Colors.blueGrey),
                     ),
-
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: const BorderSide(
@@ -381,30 +438,24 @@ class _LoginPageState extends State<LoginPage> {
                 TextField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
-
                   style: const TextStyle(fontFamily: 'Biennale', fontSize: 14),
-
                   decoration: InputDecoration(
                     hintText: 'Enter your password',
-
                     hintStyle: const TextStyle(
                       fontFamily: 'Biennale',
                       fontSize: 14,
                       color: Colors.grey,
                     ),
-
                     prefixIcon: const Icon(
                       Icons.lock_outline,
                       color: Colors.blueGrey,
                     ),
-
                     suffixIcon: IconButton(
                       onPressed: () {
                         setState(() {
                           _obscurePassword = !_obscurePassword;
                         });
                       },
-
                       icon: Icon(
                         _obscurePassword
                             ? Icons.visibility_off_outlined
@@ -412,15 +463,12 @@ class _LoginPageState extends State<LoginPage> {
                         color: Colors.blueGrey,
                       ),
                     ),
-
                     filled: true,
                     fillColor: Colors.white,
-
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: const BorderSide(color: Colors.blueGrey),
                     ),
-
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: const BorderSide(
@@ -438,12 +486,10 @@ class _LoginPageState extends State<LoginPage> {
                 // ------------------------------------------------
                 Align(
                   alignment: Alignment.centerRight,
-
                   child: TextButton(
                     onPressed: () {
-                      // Add forgot password later
+                      // Add forgot password functionality later.
                     },
-
                     child: const Text(
                       'Forgot Password?',
                       style: TextStyle(
@@ -464,27 +510,20 @@ class _LoginPageState extends State<LoginPage> {
                 SizedBox(
                   width: double.infinity,
                   height: 52,
-
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _login,
-
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF5887E0),
-
                       disabledBackgroundColor: Colors.grey.shade300,
-
                       elevation: 0,
-
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-
                     child: _isLoading
                         ? const SizedBox(
                             width: 23,
                             height: 23,
-
                             child: CircularProgressIndicator(
                               strokeWidth: 2.5,
                               color: Colors.white,
@@ -509,7 +548,6 @@ class _LoginPageState extends State<LoginPage> {
                 // ------------------------------------------------
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-
                   children: [
                     const Text(
                       "Don't have an account? ",
@@ -519,12 +557,10 @@ class _LoginPageState extends State<LoginPage> {
                         color: Colors.grey,
                       ),
                     ),
-
                     GestureDetector(
                       onTap: () {
                         Navigator.pop(context);
                       },
-
                       child: const Text(
                         'Sign Up',
                         style: TextStyle(

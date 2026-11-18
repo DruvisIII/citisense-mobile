@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:exif/exif.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
@@ -20,16 +21,18 @@ import 'package:latlong2/latlong.dart';
 // const String aiClassificationUrl =
 //     'http://192.168.1.48:5000/classify';
 //
-const String aiClassificationUrl = 'https://YOUR_BACKEND_URL/classify';
+const String aiClassificationUrl =
+    'http://192.168.1.20/citisense/api/classify_image.php';
 
 // ============================================================
 // REPORT SUBMISSION BACKEND
 // ============================================================
 
 const String submitReportUrl =
-    // 'http://192.168.1.48/citisense/api/submit_report.php';
-    'http://10.127.214.252/citisense/api/submit_report.php';
-
+    'http://192.168.1.20/citisense/api/submit_report.php';
+//'http://192.168.1.48/citisense/api/submit_report.php';
+//'http://10.127.214.252/citisense/api/submit_report.php';
+//'http://192.168.83.252/citisense/api/submit_report.php';
 // ============================================================
 // REPORT ISSUE OVERLAY
 // ============================================================
@@ -65,6 +68,9 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
   // Desktop
   //
   Uint8List? _selectedImageBytes;
+
+  // Remembers whether the image came from the camera or gallery.
+  ImageSource? _selectedImageSource;
 
   String? _selectedCategory;
 
@@ -113,42 +119,195 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
     try {
       final XFile? image = await _picker.pickImage(
         source: source,
-        imageQuality: 85,
+        // Keep the original image so gallery EXIF GPS metadata is not
+        // discarded by image-picker compression before we read it.
+        imageQuality: null,
       );
 
-      if (image == null || !mounted) {
-        return;
-      }
+      if (image == null || !mounted) return;
 
-      // ----------------------------------------------------------
-      // READ IMAGE AS BYTES
-      // ----------------------------------------------------------
-      //
-      // This works on both Flutter Web and Android.
-      //
       final Uint8List imageBytes = await image.readAsBytes();
-
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _selectedImageBytes = imageBytes;
-
-        // Reset category when a new image is selected.
+        _selectedImageSource = source;
         _selectedCategory = null;
-
+        _selectedLocation = null;
+        _selectedAddress = null;
         _aiMessage = null;
       });
 
-      // ----------------------------------------------------------
-      // SEND IMAGE TO AI
-      // ----------------------------------------------------------
+      // Camera photos use the phone's current GPS position.
+      // Gallery photos use GPS coordinates embedded in EXIF, if available.
+      LatLng? suggestedLocation;
+
+      if (source == ImageSource.camera) {
+        suggestedLocation = await _getCurrentDeviceLocation();
+        if (suggestedLocation == null && mounted) {
+          _showMessage(
+            'Photo selected, but current location could not be obtained. '
+            'Please pin the issue location manually.',
+          );
+        }
+      } else {
+        suggestedLocation = await _getGpsLocationFromExif(imageBytes);
+        if (suggestedLocation == null && mounted) {
+          _showMessage(
+            'This photo has no GPS location data. '
+            'Please pin the issue location manually.',
+          );
+        }
+      }
+
+      if (suggestedLocation != null && mounted) {
+        await _setSuggestedLocation(suggestedLocation);
+      }
 
       await _analyzeImage(imageBytes);
     } catch (e) {
+      debugPrint('Image selection error: $e');
       _showMessage('Unable to select the photo.');
     }
+  }
+
+  // ============================================================
+  // EXIF GPS EXTRACTION (GALLERY PHOTOS)
+  // ============================================================
+
+  double _ratioToDouble(Ratio ratio) {
+    if (ratio.denominator == 0) return 0;
+    return ratio.numerator / ratio.denominator;
+  }
+
+  double _degreesMinutesSecondsToDecimal(IfdRatios values) {
+    final ratios = values.ratios;
+    if (ratios.length < 3) {
+      throw const FormatException('Incomplete EXIF GPS coordinate.');
+    }
+
+    final degrees = _ratioToDouble(ratios[0]);
+    final minutes = _ratioToDouble(ratios[1]);
+    final seconds = _ratioToDouble(ratios[2]);
+
+    return degrees + (minutes / 60) + (seconds / 3600);
+  }
+
+  Future<LatLng?> _getGpsLocationFromExif(Uint8List imageBytes) async {
+    try {
+      final Map<String, IfdTag> exifData = await readExifFromBytes(imageBytes);
+
+      final latitudeTag = exifData['GPS GPSLatitude'];
+      final latitudeRefTag = exifData['GPS GPSLatitudeRef'];
+      final longitudeTag = exifData['GPS GPSLongitude'];
+      final longitudeRefTag = exifData['GPS GPSLongitudeRef'];
+
+      if (latitudeTag == null ||
+          latitudeRefTag == null ||
+          longitudeTag == null ||
+          longitudeRefTag == null ||
+          latitudeTag.values is! IfdRatios ||
+          longitudeTag.values is! IfdRatios) {
+        debugPrint('No GPS EXIF metadata found in selected gallery image.');
+        return null;
+      }
+
+      double latitude = _degreesMinutesSecondsToDecimal(
+        latitudeTag.values as IfdRatios,
+      );
+      double longitude = _degreesMinutesSecondsToDecimal(
+        longitudeTag.values as IfdRatios,
+      );
+
+      if (latitudeRefTag.printable.trim().toUpperCase() == 'S') {
+        latitude = -latitude;
+      }
+      if (longitudeRefTag.printable.trim().toUpperCase() == 'W') {
+        longitude = -longitude;
+      }
+
+      if (latitude < -90 ||
+          latitude > 90 ||
+          longitude < -180 ||
+          longitude > 180) {
+        debugPrint('EXIF GPS coordinates are outside valid ranges.');
+        return null;
+      }
+
+      debugPrint('EXIF latitude: $latitude');
+      debugPrint('EXIF longitude: $longitude');
+      return LatLng(latitude, longitude);
+    } catch (e) {
+      debugPrint('Unable to read EXIF GPS metadata: $e');
+      return null;
+    }
+  }
+
+  // ============================================================
+  // GET CURRENT DEVICE LOCATION
+  // ============================================================
+
+  Future<LatLng?> _getCurrentDeviceLocation() async {
+    try {
+      final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showMessage('Please turn on your device location services.');
+        return null;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        _showMessage(
+          'Location permission is unavailable. '
+          'Please pin the issue location manually.',
+        );
+        return null;
+      }
+
+      final Position position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 20),
+        ),
+      );
+
+      return LatLng(position.latitude, position.longitude);
+    } on TimeoutException {
+      _showMessage('Getting your current location took too long.');
+      return null;
+    } catch (e) {
+      debugPrint('Current location error: $e');
+      return null;
+    }
+  }
+
+  // ============================================================
+  // SAVE SUGGESTED LOCATION AND REVERSE GEOCODE IT
+  // ============================================================
+
+  Future<void> _setSuggestedLocation(LatLng location) async {
+    if (!mounted) return;
+
+    setState(() {
+      _selectedLocation = location;
+      _selectedAddress = null;
+    });
+
+    final String? address = await _getAddressFromCoordinates(
+      location.latitude,
+      location.longitude,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _selectedAddress = address;
+    });
   }
 
   // ============================================================
@@ -199,49 +358,21 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
   // ============================================================
 
   Future<void> _analyzeImage(Uint8List imageBytes) async {
-    if (!mounted) {
-      return;
-    }
-
-    // ----------------------------------------------------------
-    // AI BACKEND NOT CONNECTED YET
-    // ----------------------------------------------------------
-
-    if (aiClassificationUrl.contains('YOUR_BACKEND_URL')) {
-      setState(() {
-        _aiMessage =
-            'AI classification is not connected yet. '
-            'Please select a category manually.';
-      });
-
-      return;
-    }
+    if (!mounted) return;
 
     setState(() {
       _isAnalyzing = true;
-
       _aiMessage = 'AI is analyzing the photo...';
     });
 
     try {
-      // --------------------------------------------------------
-      // CREATE MULTIPART REQUEST
-      // --------------------------------------------------------
-
+      // Create multipart request to the PHP Gemini backend.
       final request = http.MultipartRequest(
         'POST',
         Uri.parse(aiClassificationUrl),
       );
 
-      // --------------------------------------------------------
-      // ADD IMAGE AS BYTES
-      // --------------------------------------------------------
-      //
-      // This replaces MultipartFile.fromPath().
-      //
-      // It works on Flutter Web.
-      //
-
+      // Attach the selected image.
       request.files.add(
         http.MultipartFile.fromBytes(
           'image',
@@ -250,60 +381,73 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
         ),
       );
 
-      // --------------------------------------------------------
-      // SEND REQUEST
-      // --------------------------------------------------------
-
       final streamedResponse = await request.send().timeout(
-        const Duration(seconds: 60),
+        const Duration(seconds: 120),
       );
 
       final response = await http.Response.fromStream(streamedResponse);
 
-      // --------------------------------------------------------
-      // CHECK RESPONSE
-      // --------------------------------------------------------
+      debugPrint('Gemini HTTP Status: ${response.statusCode}');
+      debugPrint('Gemini Response: ${response.body}');
 
-      if (response.statusCode != 200) {
-        throw Exception(
-          'AI server returned status '
-          '${response.statusCode}.',
-        );
+      // Decode the PHP response.
+      final dynamic decoded = jsonDecode(response.body);
+
+      if (decoded is! Map<String, dynamic>) {
+        throw Exception('Invalid response from the AI server.');
       }
 
-      final Map<String, dynamic> data =
-          jsonDecode(response.body) as Map<String, dynamic>;
-
-      final String predictedCategory = (data['category'] ?? '').toString();
-
-      // --------------------------------------------------------
-      // CHECK WHETHER AI CATEGORY EXISTS
-      // --------------------------------------------------------
-
-      final String normalizedCategory = _categories.contains(predictedCategory)
-          ? predictedCategory
-          : 'Others';
-
-      if (!mounted) {
-        return;
+      // Check both HTTP status and backend success.
+      if (response.statusCode != 200 || decoded['success'] != true) {
+        final message =
+            decoded['message']?.toString() ?? 'Image classification failed.';
+        throw Exception(message);
       }
+
+      // Read Gemini's predicted category.
+      final String predictedCategory = (decoded['category'] ?? '')
+          .toString()
+          .trim();
+
+      // Match Gemini's category names with CitiSense categories.
+      // PHP returns "Potholes"; CitiSense uses "Road Potholes".
+      final String normalizedCategory;
+
+      if (predictedCategory == 'Potholes') {
+        normalizedCategory = 'Road Potholes';
+      } else if (_categories.contains(predictedCategory)) {
+        normalizedCategory = predictedCategory;
+      } else {
+        normalizedCategory = 'Others';
+      }
+
+      final String reason = decoded['reason']?.toString().trim() ?? '';
+
+      if (!mounted) return;
 
       setState(() {
         _selectedCategory = normalizedCategory;
-
-        _aiMessage =
-            'AI suggestion: '
-            '$normalizedCategory';
+        _aiMessage = reason.isNotEmpty
+            ? 'AI suggestion: $normalizedCategory\n$reason'
+            : 'AI suggestion: $normalizedCategory';
       });
-    } catch (e) {
-      if (!mounted) {
-        return;
-      }
+    } on TimeoutException {
+      debugPrint('Gemini classification timed out.');
+
+      if (!mounted) return;
 
       setState(() {
         _aiMessage =
-            'Unable to analyze the photo. '
-            'Please select a category manually.';
+            'AI analysis took too long. Please select a category manually.';
+      });
+    } catch (e) {
+      debugPrint('Gemini classification error: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _aiMessage =
+            'Unable to analyze the photo. Please select a category manually.';
       });
     } finally {
       if (mounted) {
@@ -374,128 +518,37 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
   // ============================================================
 
   Future<void> _openMapPicker() async {
-    try {
-      // ----------------------------------------------------------
-      // CHECK LOCATION SERVICE
-      // ----------------------------------------------------------
+    // If the image already supplied a suggested location (camera GPS or
+    // gallery EXIF), open the map at that location. Otherwise use current
+    // GPS only as the map's starting point; the user must tap to place a pin.
+    LatLng? mapCenter = _selectedLocation;
 
-      final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (mapCenter == null) {
+      mapCenter = await _getCurrentDeviceLocation();
+    }
 
-      if (!serviceEnabled) {
-        _showMessage('Please turn on your device location services.');
+    if (!mounted) return;
 
-        await Geolocator.openLocationSettings();
+    final bool requireManualPin = _selectedLocation == null;
 
-        return;
-      }
-
-      // ----------------------------------------------------------
-      // CHECK PERMISSION
-      // ----------------------------------------------------------
-
-      LocationPermission permission = await Geolocator.checkPermission();
-
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission == LocationPermission.denied) {
-        _showMessage(
-          'Location permission is required '
-          'to show your current location.',
+    final LatLng? result = await showDialog<LatLng>(
+      context: context,
+      builder: (dialogContext) {
+        return MapLocationPicker(
+          initialLocation: mapCenter,
+          requireMapTap: requireManualPin,
         );
+      },
+    );
 
-        return;
-      }
+    if (result == null || !mounted) return;
 
-      if (permission == LocationPermission.deniedForever) {
-        _showMessage(
-          'Location permission is permanently denied. '
-          'Please enable it in app settings.',
-        );
+    await _setSuggestedLocation(result);
 
-        await Geolocator.openAppSettings();
-
-        return;
-      }
-
-      // ----------------------------------------------------------
-      // GET CURRENT GPS LOCATION
-      // ----------------------------------------------------------
-
-      final Position position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 20),
-        ),
-      );
-
-      final LatLng currentLocation = LatLng(
-        position.latitude,
-        position.longitude,
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      // ----------------------------------------------------------
-      // OPEN MAP
-      // ----------------------------------------------------------
-
-      final LatLng? result = await showDialog<LatLng>(
-        context: context,
-        builder: (dialogContext) {
-          return MapLocationPicker(initialLocation: currentLocation);
-        },
-      );
-
-      // ----------------------------------------------------------
-      // SAVE SELECTED LOCATION
-      // ----------------------------------------------------------
-
-      if (result != null && mounted) {
-        setState(() {
-          _selectedLocation = result;
-
-          // Clear the previous address because the
-          // user may have selected a new location.
-          _selectedAddress = null;
-        });
-
-        // --------------------------------------------------------
-        // GET ADDRESS FROM SELECTED COORDINATES
-        // --------------------------------------------------------
-
-        final String? address = await _getAddressFromCoordinates(
-          result.latitude,
-          result.longitude,
-        );
-
-        if (!mounted) {
-          return;
-        }
-
-        setState(() {
-          _selectedAddress = address;
-        });
-
-        if (address == null || address.trim().isEmpty) {
-          _showMessage(
-            'Unable to determine the address. '
-            'Please pin the location again.',
-          );
-        }
-      }
-    } on TimeoutException {
+    if (_selectedAddress == null || _selectedAddress!.trim().isEmpty) {
       _showMessage(
-        'Getting your location took too long. '
-        'Please try again.',
-      );
-    } catch (e) {
-      _showMessage(
-        'Unable to get your current location. '
-        'Check your GPS and try again.',
+        'Location pinned, but the address could not be determined. '
+        'Please try selecting the location again.',
       );
     }
   }
@@ -1177,7 +1230,7 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                                 ),
                               )
                               .toList(),
-                          onChanged: _isSubmitting
+                          onChanged: _isSubmitting || _isAnalyzing
                               ? null
                               : (value) {
                                   setState(() => _selectedCategory = value);
@@ -1349,8 +1402,13 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
 
 class MapLocationPicker extends StatefulWidget {
   final LatLng? initialLocation;
+  final bool requireMapTap;
 
-  const MapLocationPicker({super.key, this.initialLocation});
+  const MapLocationPicker({
+    super.key,
+    this.initialLocation,
+    this.requireMapTap = false,
+  });
 
   @override
   State<MapLocationPicker> createState() => _MapLocationPickerState();
@@ -1359,7 +1417,7 @@ class MapLocationPicker extends StatefulWidget {
 class _MapLocationPickerState extends State<MapLocationPicker> {
   static const LatLng _defaultLocation = LatLng(10.3157, 123.8854);
 
-  late LatLng _selectedLocation;
+  LatLng? _selectedLocation;
 
   late LatLng _currentLocation;
 
@@ -1371,7 +1429,12 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
 
     _currentLocation = widget.initialLocation ?? _defaultLocation;
 
-    _selectedLocation = _currentLocation;
+    // When manual pinning is required, do not preselect the map center.
+    // This prevents the phone's current position from being submitted
+    // accidentally as the issue location.
+    _selectedLocation = widget.requireMapTap
+        ? null
+        : (widget.initialLocation ?? _currentLocation);
 
     _mapController = MapController();
   }
@@ -1451,7 +1514,7 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
                     mapController: _mapController,
 
                     options: MapOptions(
-                      initialCenter: _selectedLocation,
+                      initialCenter: _currentLocation,
 
                       initialZoom: 16,
 
@@ -1477,23 +1540,20 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
                       // SELECTED LOCATION MARKER
                       // ----------------------------------------
                       MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: _selectedLocation,
-
-                            width: 50,
-
-                            height: 60,
-
-                            child: const Icon(
-                              Icons.location_on,
-
-                              size: 48,
-
-                              color: Color(0xFF2563D9),
-                            ),
-                          ),
-                        ],
+                        markers: _selectedLocation == null
+                            ? []
+                            : [
+                                Marker(
+                                  point: _selectedLocation!,
+                                  width: 50,
+                                  height: 60,
+                                  child: const Icon(
+                                    Icons.location_on,
+                                    size: 48,
+                                    color: Color(0xFF2563D9),
+                                  ),
+                                ),
+                              ],
                       ),
 
                       // ----------------------------------------
@@ -1539,11 +1599,12 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
               child: Column(
                 children: [
                   Text(
-                    'Latitude: '
-                    '${_selectedLocation.latitude.toStringAsFixed(6)}\n'
-                    'Longitude: '
-                    '${_selectedLocation.longitude.toStringAsFixed(6)}',
-
+                    _selectedLocation == null
+                        ? 'Tap the map to pin the issue location.'
+                        : 'Latitude: '
+                              '${_selectedLocation!.latitude.toStringAsFixed(6)}\n'
+                              'Longitude: '
+                              '${_selectedLocation!.longitude.toStringAsFixed(6)}',
                     textAlign: TextAlign.center,
                   ),
 
@@ -1551,12 +1612,12 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
 
                   SizedBox(
                     width: double.infinity,
-
                     child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context, _selectedLocation);
-                      },
-
+                      onPressed: _selectedLocation == null
+                          ? null
+                          : () {
+                              Navigator.pop(context, _selectedLocation);
+                            },
                       child: const Text('Confirm Location'),
                     ),
                   ),

@@ -58,7 +58,7 @@ class _HomePageState extends State<HomePage> {
   String _barangayID = '';
   String _barangayName = '';
 
-  bool _isLoading = true;
+  bool _isLoading = false;
   String? _errorMessage;
 
   // ============================================================
@@ -74,12 +74,15 @@ class _HomePageState extends State<HomePage> {
   // ============================================================
 
   static const String _getProfileUrl =
-      // 'http://192.168.1.48/citisense/api/get_profile.php';
-      'http://10.127.214.252/citisense/api/get_profile.php';
-
+      'http://192.168.1.20/citisense/api/get_profile.php';
+  // 'http://192.168.1.48/citisense/api/get_profile.php';
+  //'http://10.127.214.252/citisense/api/get_profile.php';
+  //'http://192.168.83.252/citisense/api/get_profile.php';
   static const String _getAnnouncementsUrl =
-      // 'http://192.168.1.48/citisense/api/get_announcements.php';
-      'http://10.127.214.252/citisense/api/get_announcements.php';
+      'http://192.168.1.20/citisense/api/get_announcements.php';
+  // 'http://192.168.1.48/citisense/api/get_announcements.php';
+  //'http://10.127.214.252/citisense/api/get_announcements.php';
+  //'http://192.168.83.252/citisense/api/get_announcements.php';
 
   // ============================================================
   // INIT STATE
@@ -102,6 +105,10 @@ class _HomePageState extends State<HomePage> {
     _profilePic = widget.profilePic;
     _barangayID = widget.barangayID;
 
+    // Load independently: the home page and announcements must not wait
+    // for the profile endpoint (which may time out on this network).
+    _loadAnnouncements();
+    _loadBarangayName();
     _loadUserData();
   }
 
@@ -112,10 +119,9 @@ class _HomePageState extends State<HomePage> {
   Future<void> _loadUserData() async {
     if (!mounted) return;
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    // Do not hide the home page while the optional profile refresh runs.
+    // LoginPage already supplied the user's identity and barangay ID.
+    debugPrint('[HOME] Starting profile refresh for ${widget.userID}');
 
     try {
       // ----------------------------------------------------------
@@ -127,6 +133,7 @@ class _HomePageState extends State<HomePage> {
         '${Uri.encodeComponent(widget.userID)}',
       );
 
+      debugPrint('[HOME] Profile request URL: $uri');
       final response = await http
           .get(uri, headers: {'Accept': 'application/json'})
           .timeout(const Duration(seconds: 15));
@@ -180,9 +187,9 @@ class _HomePageState extends State<HomePage> {
 
         _contactNo = latestContactNo;
 
-        _barangayID = latestBarangayID;
-
-        _barangayName = latestBarangayName;
+        // Keep the login-provided ID if the profile is missing it.
+        if (latestBarangayID.isNotEmpty) _barangayID = latestBarangayID;
+        if (latestBarangayName.isNotEmpty) _barangayName = latestBarangayName;
 
         _profilePic =
             latestProfilePic != null && latestProfilePic.trim().isNotEmpty
@@ -193,11 +200,12 @@ class _HomePageState extends State<HomePage> {
         _errorMessage = null;
       });
 
-      // ----------------------------------------------------------
-      // LOAD ANNOUNCEMENTS USING THE UPDATED BARANGAY ID
-      // ----------------------------------------------------------
-
-      await _loadAnnouncements();
+      // Refresh announcements only if the profile changed the barangay.
+      if (latestBarangayID.isNotEmpty &&
+          latestBarangayID != widget.barangayID) {
+        _loadAnnouncements();
+        _loadBarangayName();
+      }
     } catch (e) {
       debugPrint('Error loading user profile: $e');
 
@@ -223,12 +231,61 @@ class _HomePageState extends State<HomePage> {
 
         _profilePic = widget.profilePic;
 
-        _barangayID = widget.barangayID;
+        // Preserve whatever other requests have already loaded.
+        if (_barangayID.isEmpty) _barangayID = widget.barangayID;
 
         _isLoading = false;
 
-        _errorMessage = 'Unable to load your information.';
+        // Keep showing the user data supplied by login.php.
+        // An unavailable profile refresh should not block HomePage.
+        _errorMessage = null;
       });
+
+      // Announcements and barangay-name lookup are already running
+      // independently; do not restart or clear them here.
+    }
+  }
+
+  // ============================================================
+  // BARANGAY NAME (INDEPENDENT OF PROFILE)
+  // ============================================================
+
+  Future<void> _loadBarangayName() async {
+    final currentID = _barangayID.trim();
+    if (currentID.isEmpty) return;
+
+    try {
+      final uri = Uri.parse(
+        'http://10.186.51.252/citisense/api/get_barangays.php',
+      );
+      debugPrint('[HOME] Barangays request URL: $uri');
+      final response = await http
+          .get(uri, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 10));
+
+      debugPrint('[HOME] Barangays HTTP status: ${response.statusCode}');
+      if (response.statusCode != 200) return;
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map || decoded['success'] != true) return;
+      final data = decoded['data'];
+      if (data is! List) return;
+
+      for (final item in data) {
+        if (item is! Map) continue;
+        if (item['barangayID']?.toString().trim() == currentID) {
+          final name = item['barangayName']?.toString().trim() ?? '';
+          if (mounted && _barangayID == currentID && name.isNotEmpty) {
+            setState(() => _barangayName = name);
+            debugPrint('[HOME] Barangay loaded: $currentID');
+          }
+          return;
+        }
+      }
+      debugPrint('[HOME] No barangay name found for $currentID');
+    } catch (e) {
+      debugPrint('[HOME] Barangay name lookup failed: $e');
+      // A name lookup failure does not hide announcements.
     }
   }
 
@@ -268,10 +325,10 @@ class _HomePageState extends State<HomePage> {
         '${Uri.encodeComponent(_barangayID)}',
       );
 
-      final response = await http.get(
-        uri,
-        headers: {'Accept': 'application/json'},
-      );
+      debugPrint('[HOME] Announcements URL: $uri');
+      final response = await http
+          .get(uri, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 15));
 
       debugPrint('Announcements status: ${response.statusCode}');
 
@@ -317,7 +374,11 @@ class _HomePageState extends State<HomePage> {
   // ============================================================
 
   Future<void> _refreshHomePage() async {
-    await _loadUserData();
+    await Future.wait([
+      _loadUserData(),
+      _loadBarangayName(),
+      _loadAnnouncements(),
+    ]);
   }
 
   // ============================================================
@@ -347,7 +408,7 @@ class _HomePageState extends State<HomePage> {
         _selectedIndex = index;
       });
 
-      _loadUserData();
+      _refreshHomePage();
       return;
     }
 
@@ -754,7 +815,7 @@ class _HomePageState extends State<HomePage> {
     // NO BARANGAY
     // ----------------------------------------------------------
 
-    if (_barangayName.isEmpty) {
+    if (_barangayID.trim().isEmpty) {
       return _buildEmptyCard(
         icon: Icons.location_off_outlined,
         message: 'Select a barangay to view announcements.',

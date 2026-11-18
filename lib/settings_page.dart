@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'notification_preference.dart';
 
 import 'app_settings.dart';
 
@@ -12,9 +13,8 @@ const Color darkBlue = Color(0xFF172D68);
 const Color textGrey = Color(0xFF596887);
 const Color backgroundColor = Color(0xFFF5F8FD);
 
-const String baseUrl =
-    // 'http://192.168.1.48/citisense/api';
-    'http://10.127.214.252/citisense/api';
+const String baseUrl = 'http://192.168.1.20/citisense/api';
+// 'http://192.168.1.48/citisense/api';
 
 class SettingsPage extends StatefulWidget {
   final String userID;
@@ -41,6 +41,20 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  bool _notificationsEnabled = true;
+
+  Future<void> _loadNotificationPreference() async {
+    final enabled = await NotificationPreference.isEnabled();
+    if (!mounted) return;
+    setState(() => _notificationsEnabled = enabled);
+  }
+
+  Future<void> _changeNotificationPreference(bool enabled) async {
+    await NotificationPreference.setEnabled(enabled);
+    if (!mounted) return;
+    setState(() => _notificationsEnabled = enabled);
+  }
+
   late String _firstName;
   late String _lastName;
   late String _email;
@@ -51,6 +65,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
+    _loadNotificationPreference();
 
     _firstName = widget.firstName;
     _lastName = widget.lastName;
@@ -76,10 +91,10 @@ class _SettingsPageState extends State<SettingsPage> {
     }
 
     if (value.startsWith('/')) {
-      return 'http://192.168.1.48/citisense$value';
+      return 'http://192.168.1.20/citisense$value';
     }
 
-    return 'http://192.168.1.48/citisense/$value';
+    return 'http://192.168.1.20/citisense/$value';
   }
 
   Future<void> _openPersonalDetails() async {
@@ -390,7 +405,7 @@ class _SettingsPageState extends State<SettingsPage> {
           color: Color(0xFFECF0F6),
         ),
         InkWell(
-          onTap: () {}, // No notification preferences action existed in source.
+          onTap: () => _changeNotificationPreference(!_notificationsEnabled),
           borderRadius: BorderRadius.circular(18),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
@@ -402,22 +417,22 @@ class _SettingsPageState extends State<SettingsPage> {
                   const Color(0xFF1768F3),
                 ),
                 const SizedBox(width: 14),
-                Expanded(
+                const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
+                    children: [
                       Text(
-                        'AI Insights Notification',
+                        'Notifications',
                         style: TextStyle(
                           fontFamily: 'Biennale',
-                          fontSize: 15,
+                          fontSize: 16,
                           fontWeight: FontWeight.w800,
                           color: darkBlue,
                         ),
                       ),
                       SizedBox(height: 6),
                       Text(
-                        'Receive notifications for new AI insights.',
+                        'Choose whether CitiSense shows notification alerts.',
                         style: TextStyle(
                           fontFamily: 'Biennale',
                           fontSize: 12.5,
@@ -428,10 +443,10 @@ class _SettingsPageState extends State<SettingsPage> {
                     ],
                   ),
                 ),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  size: 27,
-                  color: textGrey,
+                Switch.adaptive(
+                  value: _notificationsEnabled,
+                  activeThumbColor: const Color(0xFF1563ED),
+                  onChanged: _changeNotificationPreference,
                 ),
               ],
             ),
