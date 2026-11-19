@@ -14,25 +14,17 @@ import 'package:latlong2/latlong.dart';
 // ============================================================
 // AI CLASSIFICATION BACKEND
 // ============================================================
-//
-// Replace this later with your actual YOLOv11 backend URL.
-//
-// Example:
-// const String aiClassificationUrl =
-//     'http://192.168.1.48:5000/classify';
-//
+
 const String aiClassificationUrl =
-    'http://192.168.1.20/citisense/api/classify_image.php';
+    'http://192.168.1.6/citisense/api/classify_image.php';
 
 // ============================================================
 // REPORT SUBMISSION BACKEND
 // ============================================================
 
 const String submitReportUrl =
-    'http://192.168.1.20/citisense/api/submit_report.php';
-//'http://192.168.1.48/citisense/api/submit_report.php';
-//'http://10.127.214.252/citisense/api/submit_report.php';
-//'http://192.168.83.252/citisense/api/submit_report.php';
+    'http://192.168.1.6/citisense/api/submit_report.php';
+
 // ============================================================
 // REPORT ISSUE OVERLAY
 // ============================================================
@@ -59,14 +51,7 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
   // ============================================================
   // SELECTED IMAGE
   // ============================================================
-  //
-  // Uint8List works on:
-  //
-  // Android
-  // iOS
-  // Web
-  // Desktop
-  //
+
   Uint8List? _selectedImageBytes;
 
   // Remembers whether the image came from the camera or gallery.
@@ -79,10 +64,7 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
   // ============================================================
   // SELECTED ADDRESS
   // ============================================================
-  //
-  // This is automatically obtained from the selected
-  // latitude and longitude using reverse geocoding.
-  //
+
   String? _selectedAddress;
 
   bool _isAnalyzing = false;
@@ -138,35 +120,46 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
         _aiMessage = null;
       });
 
-      // Camera photos use the phone's current GPS position.
-      // Gallery photos use GPS coordinates embedded in EXIF, if available.
       LatLng? suggestedLocation;
 
       if (source == ImageSource.camera) {
+        // CAMERA:
+        // Get the user's current GPS location.
         suggestedLocation = await _getCurrentDeviceLocation();
-        if (suggestedLocation == null && mounted) {
-          _showMessage(
-            'Photo selected, but current location could not be obtained. '
-            'Please pin the issue location manually.',
-          );
-        }
       } else {
+        // GALLERY:
+        // First, try extracting the original GPS coordinates
+        // embedded in the image's EXIF metadata.
         suggestedLocation = await _getGpsLocationFromExif(imageBytes);
-        if (suggestedLocation == null && mounted) {
-          _showMessage(
-            'This photo has no GPS location data. '
-            'Please pin the issue location manually.',
+
+        // FALLBACK:
+        // If the image has no EXIF GPS metadata, get the
+        // user's current GPS location instead.
+        if (suggestedLocation == null) {
+          debugPrint(
+            'No EXIF GPS found. Getting current device location instead.',
           );
+
+          suggestedLocation = await _getCurrentDeviceLocation();
         }
       }
 
-      if (suggestedLocation != null && mounted) {
+      if (!mounted) return;
+
+      if (suggestedLocation != null) {
         await _setSuggestedLocation(suggestedLocation);
+      } else {
+        _showMessage(
+          'Unable to determine your location. '
+          'Please pin the issue location manually.',
+        );
       }
 
+      // Continue AI image classification.
       await _analyzeImage(imageBytes);
     } catch (e) {
       debugPrint('Image selection error: $e');
+
       _showMessage('Unable to select the photo.');
     }
   }
@@ -236,6 +229,7 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
 
       debugPrint('EXIF latitude: $latitude');
       debugPrint('EXIF longitude: $longitude');
+
       return LatLng(latitude, longitude);
     } catch (e) {
       debugPrint('Unable to read EXIF GPS metadata: $e');
@@ -250,12 +244,14 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
   Future<LatLng?> _getCurrentDeviceLocation() async {
     try {
       final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+
       if (!serviceEnabled) {
         _showMessage('Please turn on your device location services.');
         return null;
       }
 
       LocationPermission permission = await Geolocator.checkPermission();
+
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
@@ -366,7 +362,7 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
     });
 
     try {
-      // Create multipart request to the PHP Gemini backend.
+      // Create multipart request to the PHP Roboflow backend.
       final request = http.MultipartRequest(
         'POST',
         Uri.parse(aiClassificationUrl),
@@ -387,8 +383,8 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
 
       final response = await http.Response.fromStream(streamedResponse);
 
-      debugPrint('Gemini HTTP Status: ${response.statusCode}');
-      debugPrint('Gemini Response: ${response.body}');
+      debugPrint('Roboflow HTTP Status: ${response.statusCode}');
+      debugPrint('Roboflow Response: ${response.body}');
 
       // Decode the PHP response.
       final dynamic decoded = jsonDecode(response.body);
@@ -404,13 +400,13 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
         throw Exception(message);
       }
 
-      // Read Gemini's predicted category.
+      // Read Roboflow's suggested category.
       final String predictedCategory = (decoded['category'] ?? '')
           .toString()
           .trim();
 
-      // Match Gemini's category names with CitiSense categories.
-      // PHP returns "Potholes"; CitiSense uses "Road Potholes".
+      // Match the returned category with CitiSense categories.
+      // Keep the legacy "Potholes" alias for response compatibility.
       final String normalizedCategory;
 
       if (predictedCategory == 'Potholes') {
@@ -432,7 +428,7 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
             : 'AI suggestion: $normalizedCategory';
       });
     } on TimeoutException {
-      debugPrint('Gemini classification timed out.');
+      debugPrint('Roboflow classification timed out.');
 
       if (!mounted) return;
 
@@ -441,7 +437,7 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
             'AI analysis took too long. Please select a category manually.';
       });
     } catch (e) {
-      debugPrint('Gemini classification error: $e');
+      debugPrint('Roboflow classification error: $e');
 
       if (!mounted) return;
 
@@ -696,10 +692,6 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
       // --------------------------------------------------------
       // ADD ADDRESS
       // --------------------------------------------------------
-      //
-      // This is the address obtained from the selected
-      // GPS coordinates.
-      //
 
       request.fields['address'] = _selectedAddress!.trim();
 
@@ -878,17 +870,13 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
         Container(
           width: 30,
           height: 30,
-
           alignment: Alignment.center,
-
           decoration: const BoxDecoration(
             color: primaryBlue,
             shape: BoxShape.circle,
           ),
-
           child: Text(
             number,
-
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
@@ -900,7 +888,6 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
 
         Text(
           title,
-
           style: const TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.bold,
@@ -918,16 +905,11 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
   InputDecoration _fieldDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
-
       filled: true,
-
       fillColor: Colors.white,
-
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-
         borderSide: const BorderSide(color: Color(0xFFB9D1F0)),
       ),
     );

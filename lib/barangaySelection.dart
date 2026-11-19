@@ -27,12 +27,12 @@ class BarangaySelection extends StatefulWidget {
 
 class _BarangaySelectionState extends State<BarangaySelection> {
   static const String _getBarangaysUrl =
-      'http://192.168.1.20/citisense/api/get_barangays.php';
+      'http://192.168.1.6/citisense/api/get_barangays.php';
   //   'http://192.168.1.48/citisense/api/get_barangays.php';
   //'http://10.127.214.252/citisense/api/get_barangays.php';
   //'http://192.168.83.252/citisense/api/get_barangays.php';
   static const String _registerUrl =
-      'http://192.168.1.20/citisense/api/register.php';
+      'http://192.168.1.6/citisense/api/register.php';
   //'http://192.168.1.48/citisense/api/register.php';
   //'http://10.127.214.252/citisense/api/register.php';
   //'http://192.168.83.252/citisense/api/register.php';

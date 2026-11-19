@@ -10,7 +10,7 @@ const Color primaryBlue = Color(0xFF5887E0);
 const Color darkBlue = Color(0xFF172D68);
 const Color textGrey = Color(0xFF596887);
 
-const String apiBaseUrl = 'http://192.168.1.20/citisense/api/';
+const String apiBaseUrl = 'http://192.168.1.6/citisense/api/';
 //'http://192.168.1.48/citisense/api/';
 //'http://10.127.214.252/citisense/api/';
 //'http://192.168.83.252/citisense/api/';

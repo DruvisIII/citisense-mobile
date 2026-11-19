@@ -10,6 +10,46 @@ const Color darkBlue = Color(0xFF101D59);
 const Color textGrey = Color(0xFF596887);
 const Color backgroundColor = Color(0xFFF7F9FD);
 
+// Parses MySQL/PHP date values consistently. Values without an explicit
+// timezone are treated as local device time (the usual SQL DATETIME format).
+DateTime? _parseReportDateTime(dynamic value) {
+  if (value == null) return null;
+
+  final rawValue = value.toString().trim();
+  if (rawValue.isEmpty) return null;
+
+  return DateTime.tryParse(rawValue.replaceFirst(' ', 'T'));
+}
+
+// A report is overdue only when its deadline is valid, comes after the
+// submission date, and has already passed. This prevents an invalid/past
+// timeline returned by the API from immediately marking a new report overdue.
+String _getEffectiveReportStatusID(Map<String, dynamic> report) {
+  final statusID = report['statusID']?.toString() ?? '';
+
+  if (statusID != 'STAT001' && statusID != 'STAT002') {
+    return statusID;
+  }
+
+  final dateReported = _parseReportDateTime(report['dateReported']);
+  final timeline = _parseReportDateTime(report['timeline']);
+
+  if (dateReported == null || timeline == null) {
+    return statusID;
+  }
+
+  // A resolution deadline should never be earlier than the report itself.
+  if (!timeline.isAfter(dateReported)) {
+    debugPrint(
+      'Invalid report timeline: deadline $timeline is not after '
+      'date reported $dateReported for ${report['reportID']}',
+    );
+    return statusID;
+  }
+
+  return DateTime.now().isAfter(timeline) ? 'STAT004' : statusID;
+}
+
 class MyReportsPage extends StatefulWidget {
   final String userID;
   final String firstName;
@@ -30,7 +70,7 @@ class MyReportsPage extends StatefulWidget {
 
 class _MyReportsPageState extends State<MyReportsPage> {
   static const String _getReportsUrl =
-      'http://192.168.1.20/citisense/api/get_my_reports.php';
+      'http://192.168.1.6/citisense/api/get_my_reports.php';
   //'http://192.168.1.48/citisense/api/get_my_reports.php';
   // 'http://10.127.214.252/citisense/api/get_my_reports.php';
   //'http://192.168.83.252/citisense/api/get_my_reports.php';
@@ -143,6 +183,14 @@ class _MyReportsPageState extends State<MyReportsPage> {
           )
           .toList();
 
+      for (final report in loadedReports) {
+        debugPrint(
+          'REPORT ${report['reportID']} | STATUS ${report['statusID']} | '
+          'DATE REPORTED ${report['dateReported']} | '
+          'TIMELINE ${report['timeline']}',
+        );
+      }
+
       if (!mounted || requestUserID != widget.userID) return;
       setState(() {
         _reports = loadedReports;
@@ -165,19 +213,8 @@ class _MyReportsPageState extends State<MyReportsPage> {
     }
   }
 
-  // A report becomes overdue when its deadline has passed and it is
-  // still Pending or In Progress. Completed reports are never overridden.
   String _getEffectiveStatusID(Map<String, dynamic> report) {
-    final statusID = report['statusID']?.toString() ?? '';
-    if (statusID == 'STAT001' || statusID == 'STAT002') {
-      final timeline = DateTime.tryParse(
-        (report['timeline']?.toString() ?? '').replaceFirst(' ', 'T'),
-      );
-      if (timeline != null && DateTime.now().isAfter(timeline)) {
-        return 'STAT004';
-      }
-    }
-    return statusID;
+    return _getEffectiveReportStatusID(report);
   }
 
   List<Map<String, dynamic>> get _filteredReports {
@@ -205,12 +242,8 @@ class _MyReportsPageState extends State<MyReportsPage> {
       return matchesStatus && matchesSearch;
     }).toList();
     filtered.sort((a, b) {
-      final aDate =
-          DateTime.tryParse(a['dateReported']?.toString() ?? '') ??
-          DateTime(1970);
-      final bDate =
-          DateTime.tryParse(b['dateReported']?.toString() ?? '') ??
-          DateTime(1970);
+      final aDate = _parseReportDateTime(a['dateReported']) ?? DateTime(1970);
+      final bDate = _parseReportDateTime(b['dateReported']) ?? DateTime(1970);
       return _newestFirst ? bDate.compareTo(aDate) : aDate.compareTo(bDate);
     });
     return filtered;
@@ -296,10 +329,10 @@ class _MyReportsPageState extends State<MyReportsPage> {
     }
 
     if (imagePath.startsWith('/')) {
-      return 'http://192.168.1.20/citisense$imagePath';
+      return 'http://192.168.1.6/citisense$imagePath';
     }
 
-    return 'http://192.168.1.20/citisense/$imagePath';
+    return 'http://192.168.1.6/citisense/$imagePath';
   }
 
   String _formatDate(String? value) {
@@ -1091,10 +1124,10 @@ class ReportDetailsPage extends StatelessWidget {
     }
 
     if (imagePath.startsWith('/')) {
-      return 'http://192.168.1.48/citisense$imagePath';
+      return 'http://192.168.1.6/citisense$imagePath';
     }
 
-    return 'http://192.168.1.48/citisense/$imagePath';
+    return 'http://192.168.1.6/citisense/$imagePath';
   }
 
   String _formatDate(String? value) {
@@ -1159,8 +1192,7 @@ class ReportDetailsPage extends StatelessWidget {
       return 'No timeline set';
     }
 
-    final normalized = value.replaceFirst(' ', 'T');
-    final date = DateTime.tryParse(normalized);
+    final date = _parseReportDateTime(value);
     if (date == null) {
       return value;
     }
@@ -1170,15 +1202,7 @@ class ReportDetailsPage extends StatelessWidget {
   }
 
   String _getEffectiveStatusID() {
-    final statusID = report['statusID']?.toString() ?? '';
-    if (statusID == 'STAT001' || statusID == 'STAT002') {
-      final value = report['timeline']?.toString() ?? '';
-      final timeline = DateTime.tryParse(value.replaceFirst(' ', 'T'));
-      if (timeline != null && DateTime.now().isAfter(timeline)) {
-        return 'STAT004';
-      }
-    }
-    return statusID;
+    return _getEffectiveReportStatusID(report);
   }
 
   String _getStatusText() {
