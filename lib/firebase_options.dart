@@ -64,8 +64,10 @@ class DefaultFirebaseOptions {
     messagingSenderId: '1067280476980',
     projectId: 'citisense-7d9f3',
     storageBucket: 'citisense-7d9f3.firebasestorage.app',
-    androidClientId: '1067280476980-k9sdjlligr08c37oj5h0uunaj6f68guo.apps.googleusercontent.com',
-    iosClientId: '1067280476980-08r2u7oarrel9hu2vgi5dd4ngpuam19v.apps.googleusercontent.com',
+    androidClientId:
+        '1067280476980-k9sdjlligr08c37oj5h0uunaj6f68guo.apps.googleusercontent.com',
+    iosClientId:
+        '1067280476980-08r2u7oarrel9hu2vgi5dd4ngpuam19v.apps.googleusercontent.com',
     iosBundleId: 'com.example.citisense',
   );
 
@@ -75,8 +77,10 @@ class DefaultFirebaseOptions {
     messagingSenderId: '1067280476980',
     projectId: 'citisense-7d9f3',
     storageBucket: 'citisense-7d9f3.firebasestorage.app',
-    androidClientId: '1067280476980-k9sdjlligr08c37oj5h0uunaj6f68guo.apps.googleusercontent.com',
-    iosClientId: '1067280476980-08r2u7oarrel9hu2vgi5dd4ngpuam19v.apps.googleusercontent.com',
+    androidClientId:
+        '1067280476980-k9sdjlligr08c37oj5h0uunaj6f68guo.apps.googleusercontent.com',
+    iosClientId:
+        '1067280476980-08r2u7oarrel9hu2vgi5dd4ngpuam19v.apps.googleusercontent.com',
     iosBundleId: 'com.example.citisense',
   );
 

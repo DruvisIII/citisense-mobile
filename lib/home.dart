@@ -74,13 +74,13 @@ class _HomePageState extends State<HomePage> {
   // ============================================================
 
   static const String _getProfileUrl =
-      'http://192.168.1.6/citisense/api/get_profile.php';
-  // 'http://192.168.1.48/citisense/api/get_profile.php';
+      // 'http://192.168.1.6/citisense/api/get_profile.php';
+      'http://10.119.145.252/citisense/api/get_profile.php';
   //'http://10.127.214.252/citisense/api/get_profile.php';
   //'http://192.168.83.252/citisense/api/get_profile.php';
   static const String _getAnnouncementsUrl =
-      'http://192.168.1.6/citisense/api/get_announcements.php';
-  // 'http://192.168.1.48/citisense/api/get_announcements.php';
+      // 'http://192.168.1.6/citisense/api/get_announcements.php';
+      'http://10.119.145.252/citisense/api/get_announcements.php';
   //'http://10.127.214.252/citisense/api/get_announcements.php';
   //'http://192.168.83.252/citisense/api/get_announcements.php';
 

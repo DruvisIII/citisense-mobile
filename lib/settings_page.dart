@@ -13,8 +13,8 @@ const Color darkBlue = Color(0xFF172D68);
 const Color textGrey = Color(0xFF596887);
 const Color backgroundColor = Color(0xFFF5F8FD);
 
-const String baseUrl = 'http://192.168.1.6/citisense/api';
-// 'http://192.168.1.48/citisense/api';
+const String baseUrl = 'http://10.119.145.252/citisense/api';
+// 'http://192.168.1.6/citisense/api';
 
 class SettingsPage extends StatefulWidget {
   final String userID;
@@ -91,10 +91,10 @@ class _SettingsPageState extends State<SettingsPage> {
     }
 
     if (value.startsWith('/')) {
-      return 'http://192.168.1.6/citisense$value';
+      return 'http://10.119.145.252/citisense$value';
     }
 
-    return 'http://192.168.1.6/citisense/$value';
+    return 'http://10.119.145.252/citisense/$value';
   }
 
   Future<void> _openPersonalDetails() async {
@@ -813,10 +813,10 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
     }
 
     if (value.startsWith('/')) {
-      return 'http://192.168.1.6/citisense$value';
+      return 'http://10.119.145.252/citisense$value';
     }
 
-    return 'http://192.168.1.6/citisense/$value';
+    return 'http://10.119.145.252/citisense/$value';
   }
 
   Future<void> _changeProfilePicture() async {

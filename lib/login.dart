@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-import 'package:citisense/barangaySelection.dart';
 import 'package:citisense/home.dart';
+import 'package:citisense/forgot_password_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -20,10 +20,12 @@ class _LoginPageState extends State<LoginPage> {
   // API URL
   // ------------------------------------------------------------
 
-  static const String _loginUrl = 'http://192.168.1.6/citisense/api/login.php';
-  //'http://192.168.1.48/citisense/api/login.php';
+  static const String _loginUrl =
+      // 'http://10.186.51.252/citisense/api/login.php';
+      'http://10.119.145.252/citisense/api/login.php';
   //'http://10.127.214.252/citisense/api/login.php';
   //'http://192.168.83.252/citisense/api/login.php';
+
   // If your PC's IP changes, update the URL above.
 
   // Diagnostic switch: set to false only temporarily to test whether
@@ -99,11 +101,14 @@ class _LoginPageState extends State<LoginPage> {
       if (_includeFcmTokenInLogin) {
         try {
           debugPrint('[LOGIN] Retrieving FCM token...');
+
           fcmToken = await FirebaseMessaging.instance.getToken().timeout(
             const Duration(seconds: 5),
           );
+
           debugPrint(
-            '[LOGIN] FCM token available: ${fcmToken != null && fcmToken.isNotEmpty}',
+            '[LOGIN] FCM token available: '
+            '${fcmToken != null && fcmToken.isNotEmpty}',
           );
         } on TimeoutException {
           debugPrint(
@@ -129,12 +134,16 @@ class _LoginPageState extends State<LoginPage> {
 
       // Never print the password or the actual FCM token.
       final requestTimer = Stopwatch()..start();
+
       debugPrint('[LOGIN] Sending POST to $_loginUrl');
+
       debugPrint(
-        '[LOGIN] Including FCM token: ${loginData.containsKey('fcmToken')}',
+        '[LOGIN] Including FCM token: '
+        '${loginData.containsKey('fcmToken')}',
       );
 
       late final http.Response response;
+
       try {
         response = await http
             .post(
@@ -143,6 +152,7 @@ class _LoginPageState extends State<LoginPage> {
               body: loginData,
             )
             .timeout(const Duration(seconds: 20));
+
         debugPrint(
           '[LOGIN] HTTP status: ${response.statusCode} '
           'after ${requestTimer.elapsedMilliseconds}ms',
@@ -153,6 +163,7 @@ class _LoginPageState extends State<LoginPage> {
           '${requestTimer.elapsedMilliseconds}ms. '
           'FCM included: ${loginData.containsKey('fcmToken')}',
         );
+
         throw TimeoutException(
           'The login server did not respond within 20 seconds. '
           'Check login.php and your Apache error log.',
@@ -248,16 +259,12 @@ class _LoginPageState extends State<LoginPage> {
       // --------------------------------------------------------
 
       if (!hasBarangay) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => BarangaySelection(
-              firstName: firstName ?? '',
-              lastName: lastName ?? '',
-              email: userEmail ?? email,
-              contactNumber: contactNo ?? '',
-              password: password,
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Your account has no assigned barangay. Please contact the administrator.',
             ),
+            backgroundColor: Colors.orange,
           ),
         );
 
@@ -488,7 +495,12 @@ class _LoginPageState extends State<LoginPage> {
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: () {
-                      // Add forgot password functionality later.
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ForgotPasswordPage(),
+                        ),
+                      );
                     },
                     child: const Text(
                       'Forgot Password?',

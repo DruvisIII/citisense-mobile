@@ -70,8 +70,8 @@ class MyReportsPage extends StatefulWidget {
 
 class _MyReportsPageState extends State<MyReportsPage> {
   static const String _getReportsUrl =
-      'http://192.168.1.6/citisense/api/get_my_reports.php';
-  //'http://192.168.1.48/citisense/api/get_my_reports.php';
+      // 'http://192.168.1.6/citisense/api/get_my_reports.php';
+      'http://10.119.145.252/citisense/api/get_my_reports.php';
   // 'http://10.127.214.252/citisense/api/get_my_reports.php';
   //'http://192.168.83.252/citisense/api/get_my_reports.php';
   int _selectedFilter = 1;
@@ -329,10 +329,10 @@ class _MyReportsPageState extends State<MyReportsPage> {
     }
 
     if (imagePath.startsWith('/')) {
-      return 'http://192.168.1.6/citisense$imagePath';
+      return 'http://10.119.145.252/citisense$imagePath';
     }
 
-    return 'http://192.168.1.6/citisense/$imagePath';
+    return 'http://10.119.145.252/citisense/$imagePath';
   }
 
   String _formatDate(String? value) {
@@ -1124,10 +1124,10 @@ class ReportDetailsPage extends StatelessWidget {
     }
 
     if (imagePath.startsWith('/')) {
-      return 'http://192.168.1.6/citisense$imagePath';
+      return 'http://10.119.145.252/citisense$imagePath';
     }
 
-    return 'http://192.168.1.6/citisense/$imagePath';
+    return 'http://10.119.145.252/citisense/$imagePath';
   }
 
   String _formatDate(String? value) {

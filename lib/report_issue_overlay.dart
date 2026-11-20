@@ -16,14 +16,14 @@ import 'package:latlong2/latlong.dart';
 // ============================================================
 
 const String aiClassificationUrl =
-    'http://192.168.1.6/citisense/api/classify_image.php';
+    'http://192.168.1.48/citisense/api/classify_image.php';
 
 // ============================================================
 // REPORT SUBMISSION BACKEND
 // ============================================================
 
 const String submitReportUrl =
-    'http://192.168.1.6/citisense/api/submit_report.php';
+    'http://10.119.145.252/citisense/api/submit_report.php';
 
 // ============================================================
 // REPORT ISSUE OVERLAY
