@@ -14,14 +14,41 @@ import 'package:flutter/material.dart';
 //   notification Notifications. Holds a ringing bell. Static.
 //   settings     Settings. Holds a gear and winks. Static.
 //   camera       Report an Issue. Takes a photo (loops).
+//   thumbsUp     Login. Static thumbs-up.
+//   peek         Peeks out from behind a button and hides (loops).
+//   sidePeek     Peeks from behind the left edge of a card. Static.
+//   sidePeekHappy  Same, with a happy face (selected card).
 // ============================================================
 
-enum MascotPose { wave, megaphone, report, notification, settings, camera }
+enum MascotPose {
+  wave,
+  megaphone,
+  report,
+  notification,
+  settings,
+  camera,
+  thumbsUp,
+  peek,
+  sidePeek,
+  sidePeekHappy,
+}
 
 class CitiMascot extends StatefulWidget {
-  const CitiMascot({super.key, required this.pose, this.playToken = 0});
+  const CitiMascot({
+    super.key,
+    required this.pose,
+    this.playToken = 0,
+    this.animate = true,
+    this.backdrop = false,
+  });
 
   final MascotPose pose;
+
+  /// Set to false to show a looping pose as a still image.
+  final bool animate;
+
+  /// Draws a community scene (sky, clouds, buildings, trees) behind it.
+  final bool backdrop;
 
   /// For [MascotPose.wave]: change this number to play the wave again.
   final int playToken;
@@ -35,7 +62,10 @@ class _CitiMascotState extends State<CitiMascot>
   late final AnimationController _controller;
 
   bool get _loops =>
-      widget.pose == MascotPose.report || widget.pose == MascotPose.camera;
+      widget.animate &&
+      (widget.pose == MascotPose.report ||
+          widget.pose == MascotPose.camera ||
+          widget.pose == MascotPose.peek);
 
   @override
   void initState() {
@@ -47,6 +77,7 @@ class _CitiMascotState extends State<CitiMascot>
           MascotPose.wave => 1900,
           MascotPose.report => 2800,
           MascotPose.camera => 3000,
+          MascotPose.peek => 4200,
           _ => 1000,
         },
       ),
@@ -89,7 +120,14 @@ class _CitiMascotState extends State<CitiMascot>
         animation: _controller,
         builder: (context, _) => CustomPaint(
           size: Size.infinite,
-          painter: _MascotPainter(widget.pose.index, _controller.value),
+          painter: _MascotPainter(
+            widget.backdrop,
+            widget.pose.index,
+            // A still peek shows the mascot fully out.
+            widget.pose == MascotPose.peek && !widget.animate
+                ? 0.3
+                : _controller.value,
+          ),
         ),
       ),
     );
@@ -97,8 +135,9 @@ class _CitiMascotState extends State<CitiMascot>
 }
 
 class _MascotPainter extends CustomPainter {
-  _MascotPainter(this.pose, this.t);
+  _MascotPainter(this.withBackdrop, this.pose, this.t);
 
+  final bool withBackdrop;
   final int pose;
   final double t;
 
@@ -112,18 +151,31 @@ class _MascotPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     _c = canvas;
-    final double s = math.min(size.width / _w, size.height / _h);
+
+    // Frame per pose: width, height and left offset in drawing units.
+    double fw = _w;
+    double fh = _h;
+    double ox = 10;
+    if (pose == 7) {
+      fh = 92; // peek: only the head above the button edge (y = 86)
+    }
+    if (pose == 8 || pose == 9) {
+      fw = 70; // side peek: the part left of the card edge (x = 66)
+      ox = -8;
+    }
+
+    final double s = math.min(size.width / fw, size.height / fh);
     canvas.save();
-    canvas.translate((size.width - _w * s) / 2, size.height - _h * s);
+    canvas.translate((size.width - fw * s) / 2, size.height - fh * s);
     canvas.scale(s);
-    canvas.translate(10, 0);
+    canvas.translate(ox, 0);
     drawMascot(pose, t);
     canvas.restore();
   }
 
   @override
   bool shouldRepaint(covariant _MascotPainter old) =>
-      old.pose != pose || old.t != t;
+      old.pose != pose || old.t != t || old.withBackdrop != withBackdrop;
 
   // ===== DRAWING (BEGIN) =====
   // Colours
@@ -176,12 +228,35 @@ class _MascotPainter extends CustomPainter {
   double penX = 61;
   double penY = 99.5;
 
+  bool skipHands = false;
+
   void drawMascot(int p, double t) {
+    if (withBackdrop) {
+      drawCommunity();
+    }
+    if (p == 6) {
+      // Thumbs-up = the wave pose at rest.
+      p = 0;
+      t = 0;
+    }
+    if (p == 7) {
+      drawPeek(t);
+      return;
+    }
+    if (p == 8 || p == 9) {
+      drawSidePeek(p == 9);
+      return;
+    }
+
     setPose(p, t);
 
     // ---------- shadow (stays on the ground) ----------
     oval(50, 116, 27 * (2 - squash), 4, fade(0xFF1E3A6E, 0.14));
 
+    drawFigure(p, t);
+  }
+
+  void drawFigure(int p, double t) {
     // Lean (sway) and squash/stretch around the feet.
     save();
     translate(50, 112);
@@ -261,8 +336,10 @@ class _MascotPainter extends CustomPainter {
     }
 
     // ---------- hands ----------
-    drawHand(lSx, lSy, lEx, lEy, lHx, lHy, lHand);
-    drawHand(rSx, rSy, rEx, rEy, rHx, rHy, rHand);
+    if (!skipHands) {
+      drawHand(lSx, lSy, lEx, lEy, lHx, lHy, lHand);
+      drawHand(rSx, rSy, rEx, rEy, rHx, rHy, rHand);
+    }
 
     // ---------- props in front of the hands ----------
     if (p == 2) {
@@ -270,6 +347,156 @@ class _MascotPainter extends CustomPainter {
     }
 
     restore();
+  }
+
+  // ============================================================
+  // COMMUNITY BACKDROP: open scene (no frame) behind the mascot
+  // clouds, houses, a tree and bushes on a soft patch of ground
+  // ============================================================
+  void drawCommunity() {
+    // Soft ground
+    oval(50, 113, 64, 9, 0xFFEAF6EC);
+    oval(50, 113, 52, 6.5, 0xFFDDF0E1);
+
+    // Clouds (tinted so they show on the light page background)
+    cloud(6, 34, 0.9);
+    cloud(94, 22, 0.8);
+    cloud(100, 56, 0.55);
+
+    // Houses behind
+    house(-6, 112, 22, 20);
+    house(80, 112, 19, 18);
+    house(97, 112, 12, 12);
+
+    // Tree on the left
+    seg(4, 112, 4, 84, 0xFF8B6B4A, 3.2);
+    seg(4, 96, -1, 90, 0xFF8B6B4A, 1.8);
+    seg(4, 92, 9, 86, 0xFF8B6B4A, 1.8);
+    circle(-3, 84, 7.5, 0xFF55AE6C);
+    circle(11, 84, 7.5, 0xFF55AE6C);
+    circle(4, 76, 10, 0xFF6CC07F);
+    circle(-2, 85, 6, 0xFF6CC07F);
+    circle(10, 85, 6, 0xFF6CC07F);
+    circle(1, 72, 2.6, fade(cWhite, 0.3));
+
+    // Bushes on the ground
+    bush(16, 111, 0.65);
+    bush(-6, 112, 0.6);
+    bush(92, 112, 0.7);
+    bush(104, 111, 0.55);
+  }
+
+  void house(double left, double base, double w, double h) {
+    int wall = 0xFFB4D2F7;
+    int roof = 0xFF8EB9F0;
+    rrect(left, base - h, left + w, base, 1, wall);
+    Path r = newPath();
+    r.moveTo(left - 2, base - h + 0.5);
+    r.lineTo(left + w / 2, base - h - w * 0.42);
+    r.lineTo(left + w + 2, base - h + 0.5);
+    r.close();
+    fillP(r, roof);
+    int win = fade(cWhite, 0.9);
+    double ww = w * 0.2;
+    rrect(left + w * 0.18, base - h * 0.68, left + w * 0.18 + ww, base - h * 0.68 + ww, 0.6, win);
+    rrect(left + w * 0.62, base - h * 0.68, left + w * 0.62 + ww, base - h * 0.68 + ww, 0.6, win);
+    rrect(left + w * 0.41, base - h * 0.42, left + w * 0.59, base, 0.6, fade(roof, 0.9));
+  }
+
+  void cloud(double x, double y, double s) {
+    int c = 0xFFDCE8F8;
+    circle(x - 6 * s, y + 1.5 * s, 4.2 * s, c);
+    circle(x, y - 1 * s, 6 * s, c);
+    circle(x + 6.5 * s, y + 1.5 * s, 4.5 * s, c);
+    rrect(x - 10 * s, y + 1 * s, x + 11 * s, y + 6 * s, 2.5 * s, c);
+  }
+
+  void bush(double x, double y, double s) {
+    int dark = 0xFF4FA96A;
+    int light = 0xFF67C182;
+    circle(x - 6 * s, y + 2 * s, 6 * s, dark);
+    circle(x + 6 * s, y + 2 * s, 6 * s, dark);
+    circle(x, y - 3 * s, 8 * s, light);
+    circle(x - 6 * s, y + 3 * s, 5 * s, light);
+    circle(x + 6 * s, y + 3 * s, 5 * s, light);
+    circle(x - 2.5 * s, y - 6 * s, 2.2 * s, fade(cWhite, 0.25));
+  }
+
+  // ============================================================
+  // PEEK: rises from behind a button, looks around, blinks, hides
+  // The button's top edge is at y = 86.
+  // ============================================================
+  double peekRise(double t) {
+    if (t < 0.12 || t > 0.9) {
+      return 0;
+    }
+    if (t < 0.24) {
+      return ease((t - 0.12) / 0.12);
+    }
+    if (t > 0.78) {
+      return 1 - ease((t - 0.78) / 0.12);
+    }
+    return 1;
+  }
+
+  void drawPeek(double t) {
+    setPose(7, t);
+    double rise = peekRise(t);
+    if (rise <= 0.001) {
+      return;
+    }
+
+    // Body: everything above the button edge, sliding up from behind it.
+    save();
+    clipRect(-30, -30, 150, 86);
+    translate(0, (1 - rise) * 84 - 2 * math.sin(rise * math.pi));
+    skipHands = true;
+    drawFigure(7, t);
+    skipHands = false;
+    restore();
+
+    // Hands grip the top of the button once the head is up.
+    double hs = clamp01((rise - 0.55) / 0.35);
+    if (hs > 0) {
+      peekHand(29, 86, hs);
+      peekHand(71, 86, hs);
+    }
+  }
+
+  void peekHand(double x, double y, double s) {
+    int fillC = bodyAt(77);
+    double r = 5.6 * s;
+    circle(x, y - 0.5, r + 1.5, cLine);
+    circle(x, y - 0.5, r, fillC);
+    if (s > 0.6) {
+      seg(x - 2, y + 1.2, x - 2, y + 4, cLine, 1);
+      seg(x + 1, y + 1.4, x + 1, y + 4.2, cLine, 1);
+    }
+  }
+
+  // ============================================================
+  // SIDE PEEK: leaning out from behind a card's left edge (x = 66)
+  // ============================================================
+  void drawSidePeek(bool happy) {
+    setPose(8, 0);
+    if (happy) {
+      eyes = 3;
+      mouth = 2;
+    }
+
+    save();
+    clipRect(-40, -30, 66, 140);
+    translate(50, 112);
+    rotate(-0.13);
+    translate(-50, -112);
+    skipHands = true;
+    drawFigure(8, 0);
+    skipHands = false;
+    drawHand(lSx, lSy, lEx, lEy, lHx, lHy, lHand);
+    restore();
+
+    // Right hand holding the card edge.
+    peekHand(66, 64, 1);
   }
 
   // ============================================================
@@ -347,6 +574,30 @@ class _MascotPainter extends CustomPainter {
       setRight(95, 92, 86, 85, 0);
       setLeft(6, 87, 18, 97, 0);
       eyes = 1;
+    }
+
+    // ----- PEEK (behind buttons): look left, look right, blink -----
+    if (p == 7) {
+      setLeft(17, 86, 29, 87, 0);
+      setRight(83, 86, 71, 87, 0);
+      flagPhase = 0.8 + t * math.pi * 2 * 3;
+      if (t > 0.3 && t < 0.46) {
+        lookX = -2.6 * math.sin(math.pi * (t - 0.3) / 0.16);
+      }
+      if (t > 0.5 && t < 0.66) {
+        lookX = 2.6 * math.sin(math.pi * (t - 0.5) / 0.16);
+      }
+      if (t > 0.69 && t < 0.74) {
+        eyes = 2;
+      }
+    }
+
+    // ----- SIDE PEEK (barangay cards): looking toward the card -----
+    if (p == 8) {
+      setLeft(10, 86, 13, 97, 0);
+      setRight(86, 70, 70, 64, 0);
+      lookX = 2.4;
+      flagPhase = 1.6;
     }
 
     // ----- CAMERA (Report an Issue): raise phone, flash, lower -----
@@ -848,6 +1099,13 @@ class _MascotPainter extends CustomPainter {
     false,
     _stroke(color, w),
   );
+
+  void clipCircle(double cx, double cy, double r) => _c.clipPath(
+    Path()..addOval(Rect.fromCircle(center: Offset(cx, cy), radius: r)),
+  );
+
+  void clipRect(double l, double t, double r, double b) =>
+      _c.clipRect(Rect.fromLTRB(l, t, r, b));
 
   void save() => _c.save();
   void restore() => _c.restore();

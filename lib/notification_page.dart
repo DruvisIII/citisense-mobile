@@ -404,7 +404,7 @@ class _NotificationPageState extends State<NotificationPage>
               top: 84,
               bottom: 6,
               width: (constraints.maxWidth - 44) * 0.40,
-              child: const CitiMascot(pose: MascotPose.notification),
+              child: const CitiMascot(pose: MascotPose.notification, backdrop: true),
             ),
           ],
         ),

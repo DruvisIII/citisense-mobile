@@ -181,6 +181,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: _buildFontSizeTile(),
               ),
               const SizedBox(height: 28),
+              _buildSectionTitle('SUPPORT'),
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: _buildAppFeedbackCard(),
+              ),
+              const SizedBox(height: 28),
               _buildSectionTitle('ACCOUNT'),
               const SizedBox(height: 10),
               Padding(
@@ -247,7 +254,7 @@ class _SettingsPageState extends State<SettingsPage> {
               top: 84,
               bottom: 6,
               width: (constraints.maxWidth - 44) * 0.40,
-              child: const CitiMascot(pose: MascotPose.settings),
+              child: const CitiMascot(pose: MascotPose.settings, backdrop: true),
             ),
           ],
         ),
@@ -526,6 +533,54 @@ class _SettingsPageState extends State<SettingsPage> {
             );
           },
         ),
+      ],
+    ),
+  );
+
+  Widget _buildAppFeedbackCard() => _tappableCard(
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AppFeedbackPage(userID: widget.userID),
+        ),
+      );
+    },
+    padding: const EdgeInsets.all(16),
+    child: Row(
+      children: [
+        _buildIconCircle(
+          Icons.rate_review_outlined,
+          AppColors.primarySoft,
+          AppColors.primary,
+        ),
+        const SizedBox(width: 14),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Send App Feedback',
+                style: TextStyle(
+                  fontFamily: appFontFamily,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: darkBlue,
+                ),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'Share suggestions or report a problem with the app.',
+                style: TextStyle(
+                  fontFamily: appFontFamily,
+                  fontSize: 12.5,
+                  color: textGrey,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Icon(Icons.chevron_right_rounded, color: textGrey, size: 28),
       ],
     ),
   );
@@ -1935,6 +1990,289 @@ class _EmailChangeVerificationPageState
         ),
       ),
     ),
+    );
+  }
+}
+
+// ============================================================
+// APP FEEDBACK
+// ------------------------------------------------------------
+// api/submit_app_feedback.php  POST userID, type, rating, message
+// ============================================================
+
+class AppFeedbackPage extends StatefulWidget {
+  const AppFeedbackPage({super.key, required this.userID});
+
+  final String userID;
+
+  @override
+  State<AppFeedbackPage> createState() => _AppFeedbackPageState();
+}
+
+class _AppFeedbackPageState extends State<AppFeedbackPage> {
+  static const List<(String, String, IconData)> _types = [
+    ('suggestion', 'Suggestion', Icons.lightbulb_outline_rounded),
+    ('complaint', 'Complaint', Icons.report_gmailerrorred_outlined),
+    ('bug', 'Bug / Problem', Icons.bug_report_outlined),
+    ('other', 'Other', Icons.chat_bubble_outline_rounded),
+  ];
+
+  final TextEditingController _messageController = TextEditingController();
+  String? _type;
+  int _rating = 0;
+  bool _sending = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _messageController.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  bool get _canSend =>
+      !_sending &&
+      _type != null &&
+      _messageController.text.trim().length >= 10;
+
+  Future<void> _send() async {
+    if (!_canSend) return;
+
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/submit_app_feedback.php'),
+            headers: {'Accept': 'application/json'},
+            body: {
+              'userID': widget.userID,
+              'type': _type!,
+              'rating': _rating.toString(),
+              'message': _messageController.text.trim(),
+            },
+          )
+          .timeout(const Duration(seconds: 25));
+
+      final decoded = jsonDecode(response.body);
+      final bool ok = response.statusCode == 200 && decoded['success'] == true;
+
+      if (!mounted) return;
+
+      if (!ok) {
+        setState(() {
+          _sending = false;
+          _error = decoded['message']?.toString() ?? 'Failed to send feedback.';
+        });
+        return;
+      }
+
+      setState(() => _sending = false);
+
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          icon: const SizedBox(
+            width: 96,
+            height: 96,
+            child: CitiMascot(pose: MascotPose.thumbsUp),
+          ),
+          title: const Text('Thank you!', textAlign: TextAlign.center),
+          content: const Text(
+            'Your feedback was sent. It helps us make CitiSense better for '
+            'everyone.',
+            textAlign: TextAlign.center,
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      debugPrint('App feedback error: $e');
+      if (!mounted) return;
+      setState(() {
+        _sending = false;
+        _error = 'Unable to send feedback. Check your connection.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: backgroundColor,
+      appBar: AppBar(
+        backgroundColor: backgroundColor,
+        title: const Text('App Feedback'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+          onPressed: _sending ? null : () => Navigator.pop(context),
+        ),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Tell us what you think about CitiSense. Suggestions, '
+                'complaints, and problem reports all help us improve.',
+                style: AppText.subtitle,
+              ),
+              const SizedBox(height: 22),
+
+              const Text('Type of feedback', style: AppText.fieldLabel),
+              const SizedBox(height: 10),
+              GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 3.2,
+                children: [
+                  for (final t in _types)
+                    _typeChip(value: t.$1, label: t.$2, icon: t.$3),
+                ],
+              ),
+
+              const SizedBox(height: 22),
+              const Text(
+                'How would you rate the app? (optional)',
+                style: AppText.fieldLabel,
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: List.generate(
+                  5,
+                  (i) => IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 44,
+                      minHeight: 44,
+                    ),
+                    onPressed: () => setState(
+                      () => _rating = _rating == i + 1 ? 0 : i + 1,
+                    ),
+                    icon: Icon(
+                      i < _rating
+                          ? Icons.star_rounded
+                          : Icons.star_outline_rounded,
+                      color: i < _rating
+                          ? const Color(0xFFF5B800)
+                          : AppColors.border,
+                      size: 34,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 18),
+              const Text('Your feedback', style: AppText.fieldLabel),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _messageController,
+                minLines: 5,
+                maxLines: 8,
+                maxLength: 1000,
+                textCapitalization: TextCapitalization.sentences,
+                style: const TextStyle(fontFamily: appFontFamily, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Write at least 10 characters...',
+                  fillColor: Colors.white,
+                  errorText: _error,
+                  errorMaxLines: 3,
+                ),
+              ),
+
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _canSend ? _send : null,
+                  child: _sending
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Send Feedback'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _typeChip({
+    required String value,
+    required String label,
+    required IconData icon,
+  }) {
+    final bool selected = _type == value;
+
+    return Material(
+      color: selected ? AppColors.primarySoft : Colors.white,
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        onTap: _sending ? null : () => setState(() => _type = value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            border: Border.all(
+              color: selected ? AppColors.primary : AppColors.border,
+              width: selected ? 1.6 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: selected ? AppColors.primary : AppColors.textSecondary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: appFontFamily,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: selected ? AppColors.primary : AppColors.ink,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

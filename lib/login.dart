@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:citisense/app_theme.dart';
+import 'package:citisense/mascot.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_messaging/firebase_messaging.dart';
 
@@ -343,21 +344,57 @@ class _LoginPageState extends State<LoginPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 12),
+              const SizedBox(height: 4),
+
+              // ------------------------------------------------
+              // MASCOT WITH CITY (logo artwork, no frame or text)
+              // ------------------------------------------------
+              Center(
+                child: Image.asset(
+                  'assets/citisense_mascot_scene.png',
+                  height: 170,
+                  fit: BoxFit.contain,
+                  // Falls back to the drawn mascot if the image is missing.
+                  errorBuilder: (context, error, stackTrace) => const SizedBox(
+                    width: 150,
+                    height: 150,
+                    child: CitiMascot(pose: MascotPose.thumbsUp),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
 
               // ------------------------------------------------
               // TITLE
               // ------------------------------------------------
-              const Text('Welcome Back!', style: AppText.pageTitle),
+              const Center(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: 'Welcome back to\n'),
+                      TextSpan(
+                        text: 'CitiSense',
+                        style: TextStyle(color: AppColors.primary),
+                      ),
+                    ],
+                  ),
+                  textAlign: TextAlign.center,
+                  style: AppText.pageTitle,
+                ),
+              ),
 
               const SizedBox(height: 8),
 
-              const Text(
-                'Log in to continue to CitiSense.',
-                style: AppText.subtitle,
+              const Center(
+                child: Text(
+                  'Log in to continue reporting and tracking issues.',
+                  textAlign: TextAlign.center,
+                  style: AppText.subtitle,
+                ),
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
 
               // ------------------------------------------------
               // EMAIL

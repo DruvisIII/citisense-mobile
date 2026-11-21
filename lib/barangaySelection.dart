@@ -3,6 +3,7 @@ import 'package:citisense/api_config.dart';
 
 import 'package:flutter/material.dart';
 import 'package:citisense/app_theme.dart';
+import 'package:citisense/mascot.dart';
 import 'package:http/http.dart' as http;
 import 'package:citisense/login.dart';
 
@@ -234,8 +235,13 @@ class _BarangaySelectionState extends State<BarangaySelection> {
     final isSelected = _selectedBarangayId == barangayId;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Material(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 40),
+            child: Material(
         color: isSelected ? AppColors.primarySoft : AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.md),
         child: InkWell(
@@ -329,6 +335,31 @@ class _BarangaySelectionState extends State<BarangaySelection> {
             ),
           ),
         ),
+      ),
+          ),
+          // Every card (including newly added barangays) gets a mascot
+          // peeking from behind its left edge. Drawn on top so its hand
+          // overlaps the card edge; the body is cut off at the edge.
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 50,
+            child: IgnorePointer(
+              child: Center(
+                child: SizedBox(
+                  width: 50,
+                  height: 84,
+                  child: CitiMascot(
+                    pose: isSelected
+                        ? MascotPose.sidePeekHappy
+                        : MascotPose.sidePeek,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -453,32 +484,51 @@ class _BarangaySelectionState extends State<BarangaySelection> {
 
             // Continue button
             Container(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
               decoration: const BoxDecoration(
                 color: AppColors.surface,
                 border: Border(top: BorderSide(color: AppColors.divider)),
               ),
               child: Column(
                 children: [
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed:
-                          (_isRegistering || _isLoading || _barangays.isEmpty)
-                          ? null
-                          : _registerAccount,
-                      child: _isRegistering
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('Continue'),
-                    ),
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed:
+                              (_isRegistering ||
+                                  _isLoading ||
+                                  _barangays.isEmpty)
+                              ? null
+                              : _registerAccount,
+                          child: _isRegistering
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text('Continue'),
+                        ),
+                      ),
+                      // Mascot peeks out from behind the button and hides.
+                      const Positioned(
+                        left: 18,
+                        top: -70,
+                        child: IgnorePointer(
+                          child: SizedBox(
+                            width: 96,
+                            height: 75,
+                            child: CitiMascot(pose: MascotPose.peek),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 14),
                   const Text(

@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:citisense/app_theme.dart';
+import 'package:citisense/report_engagement.dart';
 import 'package:citisense/mascot.dart';
 import 'package:http/http.dart' as http;
 
@@ -452,7 +453,8 @@ class _MyReportsPageState extends State<MyReportsPage> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ReportDetailsPage(report: report),
+        builder: (context) =>
+            ReportDetailsPage(report: report, userID: widget.userID),
       ),
     );
     if (mounted) await _loadReports();
@@ -639,7 +641,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
 
   Widget _buildMascot() {
     // Mascot writing a report on a clipboard (loops).
-    return const CitiMascot(pose: MascotPose.report);
+    return const CitiMascot(pose: MascotPose.report, backdrop: true);
   }
 
   Widget _buildReportsHeading() {
@@ -1097,8 +1099,9 @@ class _MyReportsPageState extends State<MyReportsPage> {
 
 class ReportDetailsPage extends StatelessWidget {
   final Map<String, dynamic> report;
+  final String? userID;
 
-  const ReportDetailsPage({super.key, required this.report});
+  const ReportDetailsPage({super.key, required this.report, this.userID});
 
   String? _getImageUrl() {
     final imagePath = report['imagePath']?.toString().trim();
@@ -1430,6 +1433,18 @@ class ReportDetailsPage extends StatelessWidget {
                 title: 'Report ID',
                 value: report['reportID']?.toString() ?? '',
               ),
+
+              // ------------------------------------------------
+              // FEEDBACK (after resolved) + UPDATES & MESSAGES
+              // ------------------------------------------------
+              ReportEngagementSection(
+                userID: userID ?? report['userID']?.toString() ?? '',
+                reportID: report['reportID']?.toString() ?? '',
+                isResolved: _getEffectiveStatusID() == 'STAT003',
+                dateReported: _parseReportDateTime(report['dateReported']),
+              ),
+
+              const SizedBox(height: 24),
             ],
           ),
         ),

@@ -644,6 +644,8 @@ class _HomePageState extends State<HomePage> {
                         child: CitiMascot(
                           pose: MascotPose.wave,
                           playToken: _waveToken,
+                          // Community scene behind the waving mascot.
+                          backdrop: true,
                         ),
                       ),
                     ),
