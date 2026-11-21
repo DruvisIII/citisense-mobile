@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:citisense/api_config.dart';
 import 'package:citisense/app_theme.dart';
+import 'package:citisense/live_updates.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -216,20 +217,29 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
   void initState() {
     super.initState();
     _load();
+    // Barangay replies and status updates appear without refreshing.
+    LiveUpdates.instance.changes.addListener(_onLiveUpdate);
+  }
+
+  void _onLiveUpdate() {
+    if (mounted && !_sending && !_savingFeedback) _load(silent: true);
   }
 
   @override
   void dispose() {
+    LiveUpdates.instance.changes.removeListener(_onLiveUpdate);
     _feedbackComment.dispose();
     _messageController.dispose();
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _loadError = null;
-    });
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _loadError = null;
+      });
+    }
 
     final result = await ReportEngagementApi.loadThread(
       userID: widget.userID,
@@ -239,6 +249,8 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
     if (!mounted) return;
 
     if (!result.success || result.data == null) {
+      // A failed background refresh keeps what is on screen.
+      if (silent) return;
       setState(() {
         _loading = false;
         _loadError = result.message.isEmpty

@@ -3,6 +3,7 @@ import 'package:citisense/api_config.dart';
 
 import 'package:flutter/material.dart';
 import 'package:citisense/app_theme.dart';
+import 'package:citisense/live_updates.dart';
 import 'package:citisense/mascot.dart';
 import 'package:http/http.dart' as http;
 
@@ -56,11 +57,19 @@ class _NotificationPageState extends State<NotificationPage>
     _openedAppSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
       _onFirebaseMessage,
     );
+
+    // Status updates, announcements, and barangay replies.
+    LiveUpdates.instance.changes.addListener(_onLiveUpdate);
+  }
+
+  void _onLiveUpdate() {
+    if (mounted) fetchNotifications(showLoading: false);
   }
 
   void _onFirebaseMessage(RemoteMessage message) {
-    if (!mounted || message.data['type'] != 'report_status') return;
-    // Read fresh notifications from MySQL instead of trusting push text.
+    if (!mounted) return;
+    // Any push (status update, announcement, barangay reply): read fresh
+    // notifications from MySQL instead of trusting push text.
     fetchNotifications(showLoading: false);
   }
 
@@ -83,6 +92,7 @@ class _NotificationPageState extends State<NotificationPage>
 
   @override
   void dispose() {
+    LiveUpdates.instance.changes.removeListener(_onLiveUpdate);
     _foregroundMessageSubscription?.cancel();
     _openedAppSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);

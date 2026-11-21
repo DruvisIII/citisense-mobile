@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:citisense/app_theme.dart';
+import 'package:citisense/live_updates.dart';
 import 'package:citisense/mascot.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -730,6 +731,8 @@ class _SettingsPageState extends State<SettingsPage> {
       },
     ).then((confirmed) {
       if (confirmed == true && mounted) {
+        // Stop automatic refreshing.
+        LiveUpdates.instance.stop();
         Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
     });

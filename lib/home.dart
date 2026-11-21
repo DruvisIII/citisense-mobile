@@ -3,6 +3,7 @@ import 'package:citisense/api_config.dart';
 
 import 'package:flutter/material.dart';
 import 'package:citisense/app_theme.dart';
+import 'package:citisense/live_updates.dart';
 import 'package:citisense/mascot.dart';
 import 'package:http/http.dart' as http;
 
@@ -112,6 +113,26 @@ class _HomePageState extends State<HomePage> {
     _loadAnnouncements();
     _loadBarangayName();
     _loadUserData();
+
+    // Keep announcements fresh automatically and register this phone
+    // for push notifications.
+    LiveUpdates.instance.start(
+      userID: widget.userID,
+      barangayID: widget.barangayID,
+    );
+    LiveUpdates.instance.changes.addListener(_onLiveUpdate);
+  }
+
+  @override
+  void dispose() {
+    LiveUpdates.instance.changes.removeListener(_onLiveUpdate);
+    super.dispose();
+  }
+
+  void _onLiveUpdate() {
+    if (!mounted) return;
+    LiveUpdates.instance.start(userID: widget.userID, barangayID: _barangayID);
+    _loadAnnouncements(silent: true);
   }
 
   // ============================================================
@@ -295,12 +316,15 @@ class _HomePageState extends State<HomePage> {
   // LOAD ANNOUNCEMENTS
   // ============================================================
 
-  Future<void> _loadAnnouncements() async {
+  // silent: refresh in the background without showing the loader.
+  Future<void> _loadAnnouncements({bool silent = false}) async {
     if (!mounted) return;
 
-    setState(() {
-      _isLoadingAnnouncements = true;
-    });
+    if (!silent) {
+      setState(() {
+        _isLoadingAnnouncements = true;
+      });
+    }
 
     try {
       // ----------------------------------------------------------
@@ -365,7 +389,8 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
 
       setState(() {
-        _announcements = [];
+        // A failed background refresh keeps the current list.
+        if (!silent) _announcements = [];
         _isLoadingAnnouncements = false;
       });
     }
@@ -393,7 +418,11 @@ class _HomePageState extends State<HomePage> {
       barrierDismissible: false,
       builder: (context) =>
           ReportIssueOverlay(userID: widget.userID, barangayID: _barangayID),
-    );
+    ).then((_) {
+      // A new report may have been submitted: refresh My Reports.
+      LiveUpdates.instance.notifyChanged();
+      LiveUpdates.instance.checkNow();
+    });
   }
 
   // ============================================================

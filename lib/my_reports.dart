@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:citisense/app_theme.dart';
+import 'package:citisense/live_updates.dart';
 import 'package:citisense/report_engagement.dart';
 import 'package:citisense/mascot.dart';
 import 'package:http/http.dart' as http;
@@ -128,6 +129,13 @@ class _MyReportsPageState extends State<MyReportsPage> {
       debugPrint('My Reports: notification opened ${message.messageId}');
       _loadReports();
     });
+
+    // New report submitted, status changed, or app resumed.
+    LiveUpdates.instance.changes.addListener(_onLiveUpdate);
+  }
+
+  void _onLiveUpdate() {
+    if (mounted) _loadReports();
   }
 
   // Using a dedicated observer keeps the state lifecycle handling simple.
@@ -150,6 +158,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
 
   @override
   void dispose() {
+    LiveUpdates.instance.changes.removeListener(_onLiveUpdate);
     _refreshTimer?.cancel();
     _foregroundMessages?.cancel();
     _openedMessages?.cancel();
