@@ -1,19 +1,19 @@
+import 'dart:async';
 import 'dart:convert';
+import 'package:citisense/api_config.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:citisense/app_theme.dart';
+import 'package:citisense/mascot.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'notification_preference.dart';
 
 import 'app_settings.dart';
 
-const Color primaryBlue = Color(0xFF5887E0);
-const Color darkBlue = Color(0xFF172D68);
-const Color textGrey = Color(0xFF596887);
-const Color backgroundColor = Color(0xFFF5F8FD);
 
-const String baseUrl = 'http://10.119.145.252/citisense/api';
+const String baseUrl = '$serverBaseUrl/api';
 // 'http://192.168.1.6/citisense/api';
 
 class SettingsPage extends StatefulWidget {
@@ -66,6 +66,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void initState() {
     super.initState();
     _loadNotificationPreference();
+    _loadAiInsightsPreference();
 
     _firstName = widget.firstName;
     _lastName = widget.lastName;
@@ -91,10 +92,10 @@ class _SettingsPageState extends State<SettingsPage> {
     }
 
     if (value.startsWith('/')) {
-      return 'http://10.119.145.252/citisense$value';
+      return '$serverBaseUrl$value';
     }
 
-    return 'http://10.119.145.252/citisense/$value';
+    return '$serverBaseUrl/$value';
   }
 
   Future<void> _openPersonalDetails() async {
@@ -125,8 +126,29 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  // UI state only. No AI preference backend is configured in the original file.
+  // Saved on this device; read by the Report an Issue screen.
   bool _aiInsightsEnabled = true;
+
+  Future<void> _loadAiInsightsPreference() async {
+    final enabled = await AiInsightsPreference.isEnabled();
+    if (mounted) setState(() => _aiInsightsEnabled = enabled);
+  }
+
+  Future<void> _setAiInsights(bool enabled) async {
+    setState(() => _aiInsightsEnabled = enabled);
+    await AiInsightsPreference.setEnabled(enabled);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          enabled
+              ? 'AI Insights on: photos will be analyzed automatically.'
+              : 'AI Insights off: you will choose the category yourself.',
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -141,32 +163,28 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               _buildHeader(),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-                child: InkWell(
-                  onTap: _openPersonalDetails,
-                  borderRadius: BorderRadius.circular(24),
-                  child: _buildProfileCard(),
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: _buildProfileCard(),
               ),
-              const SizedBox(height: 25),
+              const SizedBox(height: 28),
               _buildSectionTitle('PREFERENCES'),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: _buildPreferencesCard(),
               ),
-              const SizedBox(height: 25),
+              const SizedBox(height: 28),
               _buildSectionTitle('ACCESSIBILITY'),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: _buildFontSizeTile(),
               ),
-              const SizedBox(height: 25),
+              const SizedBox(height: 28),
               _buildSectionTitle('ACCOUNT'),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: _buildLogoutCard(),
               ),
             ],
@@ -199,11 +217,11 @@ class _SettingsPageState extends State<SettingsPage> {
                     maxLines: 1,
                     softWrap: false,
                     style: const TextStyle(
-                      fontFamily: 'Biennale',
+                      fontFamily: appFontFamily,
                       fontSize: 37,
                       fontWeight: FontWeight.w800,
                       height: 1.15,
-                      color: Color(0xFF0E235B),
+                      color: AppColors.ink,
                     ),
                   ),
                 ),
@@ -216,36 +234,20 @@ class _SettingsPageState extends State<SettingsPage> {
               child: Text(
                 'Manage your account and app preferences.',
                 style: const TextStyle(
-                  fontFamily: 'Biennale',
+                  fontFamily: appFontFamily,
                   fontSize: 16,
                   height: 1.5,
                   color: textGrey,
                 ),
               ),
             ),
-            // Replace this placeholder with your mascot Image.asset later.
+            // Mascot (static pose for this page).
             Positioned(
               right: 18,
-              top: 91,
-              bottom: 10,
+              top: 84,
+              bottom: 6,
               width: (constraints.maxWidth - 44) * 0.40,
-              child: Container(
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEAF3FF),
-                  border: Border.all(color: const Color(0xFFCFE1FF)),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: const Text(
-                  'Mascot\nplaceholder',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'Biennale',
-                    fontSize: 13,
-                    color: textGrey,
-                  ),
-                ),
-              ),
+              child: const CitiMascot(pose: MascotPose.settings),
             ),
           ],
         ),
@@ -255,28 +257,42 @@ class _SettingsPageState extends State<SettingsPage> {
 
   BoxDecoration _cardDecoration() => BoxDecoration(
     color: Colors.white,
-    borderRadius: BorderRadius.circular(23),
-    boxShadow: [
-      BoxShadow(
-        color: const Color(0xFF344B79).withOpacity(0.08),
-        blurRadius: 17,
-        offset: const Offset(0, 5),
-      ),
-    ],
+    borderRadius: BorderRadius.circular(AppRadius.lg),
+    boxShadow: AppShadows.card,
   );
+
+  // White card whose tap ripple is visible (drawn above the card colour).
+  Widget _tappableCard({
+    required VoidCallback onTap,
+    required EdgeInsetsGeometry padding,
+    required Widget child,
+  }) {
+    return Container(
+      width: double.infinity,
+      decoration: _cardDecoration(),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          child: Padding(padding: padding, child: child),
+        ),
+      ),
+    );
+  }
 
   Widget _buildProfileCard() {
     final imageUrl = _getProfileImageUrl(_profilePic);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 18),
-      decoration: _cardDecoration(),
+    return _tappableCard(
+      onTap: _openPersonalDetails,
+      padding: const EdgeInsets.all(16),
       child: Row(
         children: [
           ClipOval(
             child: SizedBox(
-              width: 71,
-              height: 71,
+              width: 64,
+              height: 64,
               child: imageUrl == null
                   ? _defaultProfileIcon()
                   : Image.network(
@@ -297,7 +313,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontFamily: 'Biennale',
+                    fontFamily: appFontFamily,
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                     color: darkBlue,
@@ -309,7 +325,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontFamily: 'Biennale',
+                    fontFamily: appFontFamily,
                     fontSize: 13,
                     color: textGrey,
                   ),
@@ -324,33 +340,25 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _defaultProfileIcon() => Container(
-    color: const Color(0xFFE4EEFF),
+    color: AppColors.primarySoft,
     child: const Icon(Icons.person_rounded, color: primaryBlue, size: 42),
   );
 
   Widget _buildSectionTitle(String title) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 21),
-    child: Text(
-      title,
-      style: const TextStyle(
-        fontFamily: 'Biennale',
-        fontSize: 13,
-        color: textGrey,
-        fontWeight: FontWeight.w800,
-      ),
-    ),
+    padding: const EdgeInsets.symmetric(horizontal: 24),
+    child: Text(title, style: AppText.sectionLabel),
   );
 
   Widget _buildIconCircle(IconData icon, Color bg, Color color) => Container(
-    width: 51,
-    height: 51,
+    width: 46,
+    height: 46,
     decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-    child: Icon(icon, color: color, size: 27),
+    child: Icon(icon, color: color, size: 24),
   );
 
   Widget _buildPreferencesCard() => Container(
     decoration: _cardDecoration(),
-    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     child: Column(
       children: [
         Padding(
@@ -359,8 +367,8 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               _buildIconCircle(
                 Icons.auto_awesome,
-                const Color(0xFFF0E7FF),
-                const Color(0xFF8045DF),
+                AppColors.accentSoft,
+                AppColors.accent,
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -370,7 +378,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     Text(
                       'AI Insights',
                       style: TextStyle(
-                        fontFamily: 'Biennale',
+                        fontFamily: appFontFamily,
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
                         color: darkBlue,
@@ -378,9 +386,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                     SizedBox(height: 6),
                     Text(
-                      'Get AI-powered insights about community issues.',
+                      'Analyze report photos and pick the issue category automatically.',
                       style: TextStyle(
-                        fontFamily: 'Biennale',
+                        fontFamily: appFontFamily,
                         fontSize: 12.5,
                         height: 1.4,
                         color: textGrey,
@@ -391,18 +399,17 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               Switch.adaptive(
                 value: _aiInsightsEnabled,
-                activeColor: const Color(0xFF1563ED),
-                onChanged: (value) =>
-                    setState(() => _aiInsightsEnabled = value),
+                activeTrackColor: AppColors.primary,
+                onChanged: _setAiInsights,
               ),
             ],
           ),
         ),
         const Divider(
           height: 1,
-          thickness: 0.8,
-          indent: 65,
-          color: Color(0xFFECF0F6),
+          thickness: 1,
+          indent: 60,
+          color: AppColors.divider,
         ),
         InkWell(
           onTap: () => _changeNotificationPreference(!_notificationsEnabled),
@@ -413,8 +420,8 @@ class _SettingsPageState extends State<SettingsPage> {
               children: [
                 _buildIconCircle(
                   Icons.notifications_none_rounded,
-                  const Color(0xFFE9F1FF),
-                  const Color(0xFF1768F3),
+                  AppColors.primarySoft,
+                  AppColors.primary,
                 ),
                 const SizedBox(width: 14),
                 const Expanded(
@@ -424,7 +431,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       Text(
                         'Notifications',
                         style: TextStyle(
-                          fontFamily: 'Biennale',
+                          fontFamily: appFontFamily,
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
                           color: darkBlue,
@@ -434,7 +441,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       Text(
                         'Choose whether CitiSense shows notification alerts.',
                         style: TextStyle(
-                          fontFamily: 'Biennale',
+                          fontFamily: appFontFamily,
                           fontSize: 12.5,
                           height: 1.4,
                           color: textGrey,
@@ -445,7 +452,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 Switch.adaptive(
                   value: _notificationsEnabled,
-                  activeThumbColor: const Color(0xFF1563ED),
+                  activeTrackColor: AppColors.primary,
                   onChanged: _changeNotificationPreference,
                 ),
               ],
@@ -458,13 +465,13 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildFontSizeTile() => Container(
     decoration: _cardDecoration(),
-    padding: const EdgeInsets.all(15),
+    padding: const EdgeInsets.all(16),
     child: Row(
       children: [
         _buildIconCircle(
           Icons.text_fields_rounded,
-          const Color(0xFFE7F8ED),
-          const Color(0xFF28B55C),
+          AppColors.successSoft,
+          AppColors.success,
         ),
         const SizedBox(width: 13),
         Expanded(
@@ -474,7 +481,7 @@ class _SettingsPageState extends State<SettingsPage> {
               Text(
                 'Font Size',
                 style: TextStyle(
-                  fontFamily: 'Biennale',
+                  fontFamily: appFontFamily,
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
                   color: darkBlue,
@@ -484,7 +491,7 @@ class _SettingsPageState extends State<SettingsPage> {
               Text(
                 'Adjust the text size in the app.',
                 style: TextStyle(
-                  fontFamily: 'Biennale',
+                  fontFamily: appFontFamily,
                   fontSize: 12,
                   height: 1.4,
                   color: textGrey,
@@ -505,8 +512,8 @@ class _SettingsPageState extends State<SettingsPage> {
             return Container(
               padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F2F6),
-                borderRadius: BorderRadius.circular(17),
+                color: AppColors.surfaceMuted,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -523,18 +530,15 @@ class _SettingsPageState extends State<SettingsPage> {
     ),
   );
 
-  Widget _buildLogoutCard() => InkWell(
+  Widget _buildLogoutCard() => _tappableCard(
     onTap: _logout,
-    borderRadius: BorderRadius.circular(23),
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 18),
-      decoration: _cardDecoration(),
-      child: Row(
+    padding: const EdgeInsets.all(16),
+    child: Row(
         children: [
           _buildIconCircle(
             Icons.logout_rounded,
-            const Color(0xFFFFE9E9),
-            const Color(0xFFF02E38),
+            AppColors.dangerSoft,
+            AppColors.danger,
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -544,17 +548,17 @@ class _SettingsPageState extends State<SettingsPage> {
                 Text(
                   'Log Out',
                   style: TextStyle(
-                    fontFamily: 'Biennale',
+                    fontFamily: appFontFamily,
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
-                    color: darkBlue,
+                    color: AppColors.danger,
                   ),
                 ),
                 SizedBox(height: 6),
                 Text(
                   'Sign out of your account.',
                   style: TextStyle(
-                    fontFamily: 'Biennale',
+                    fontFamily: appFontFamily,
                     fontSize: 12.5,
                     color: textGrey,
                   ),
@@ -565,7 +569,6 @@ class _SettingsPageState extends State<SettingsPage> {
           const Icon(Icons.chevron_right_rounded, color: textGrey, size: 28),
         ],
       ),
-    ),
   );
 
   Widget _fontOption(String label, String selected) {
@@ -594,7 +597,7 @@ class _SettingsPageState extends State<SettingsPage> {
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
+                    color: AppColors.shadow.withValues(alpha: 0.06),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),
@@ -607,7 +610,7 @@ class _SettingsPageState extends State<SettingsPage> {
             fontSize: 11,
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
             color: isSelected ? darkBlue : textGrey,
-            fontFamily: 'Biennale',
+            fontFamily: appFontFamily,
           ),
         ),
       ),
@@ -619,26 +622,22 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
           title: const Text(
-            'Logout',
+            'Log Out',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w700,
               color: darkBlue,
-              fontFamily: 'Biennale',
+              fontFamily: appFontFamily,
             ),
           ),
           content: const Text(
-            'Are you sure you want to logout?',
+            'Are you sure you want to log out?',
             style: TextStyle(
               fontSize: 14,
               height: 1.5,
               color: textGrey,
-              fontFamily: 'Biennale',
+              fontFamily: appFontFamily,
             ),
           ),
           actionsPadding: const EdgeInsets.fromLTRB(15, 0, 15, 15),
@@ -653,7 +652,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   color: textGrey,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  fontFamily: 'Biennale',
+                  fontFamily: appFontFamily,
                 ),
               ),
             ),
@@ -662,12 +661,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 Navigator.pop(dialogContext, true);
               },
               child: const Text(
-                'Logout',
+                'Log Out',
                 style: TextStyle(
-                  color: Color(0xFFE14D4D),
+                  color: AppColors.danger,
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  fontFamily: 'Biennale',
+                  fontFamily: appFontFamily,
                 ),
               ),
             ),
@@ -813,10 +812,10 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
     }
 
     if (value.startsWith('/')) {
-      return 'http://10.119.145.252/citisense$value';
+      return '$serverBaseUrl$value';
     }
 
-    return 'http://10.119.145.252/citisense/$value';
+    return '$serverBaseUrl/$value';
   }
 
   Future<void> _changeProfilePicture() async {
@@ -855,28 +854,13 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-      ),
       builder: (context) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 15),
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 15),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 45,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
                 const Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
@@ -885,7 +869,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                       color: darkBlue,
-                      fontFamily: 'Biennale',
+                      fontFamily: appFontFamily,
                     ),
                   ),
                 ),
@@ -919,7 +903,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
                             width: 42,
                             height: 42,
                             decoration: const BoxDecoration(
-                              color: Color(0xFFE8F0FF),
+                              color: AppColors.primarySoft,
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(
@@ -935,7 +919,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
                                   ? FontWeight.w700
                                   : FontWeight.w500,
                               color: darkBlue,
-                              fontFamily: 'Biennale',
+                              fontFamily: appFontFamily,
                             ),
                           ),
                           trailing: isSelected
@@ -996,6 +980,19 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
       );
 
       return;
+    }
+
+    // ------------------------------------------------------
+    // NEW EMAIL: check it is not used, then verify it with a code
+    // ------------------------------------------------------
+    final bool emailChanged =
+        email.toLowerCase() != widget.email.trim().toLowerCase();
+
+    if (emailChanged) {
+      final bool verified = await _verifyNewEmail(email, firstName);
+      if (!verified || !mounted) {
+        return;
+      }
     }
 
     setState(() {
@@ -1109,6 +1106,82 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
     }
   }
 
+  // Sends a code to the new email (the server rejects emails that are
+  // already used), then opens the code screen. Returns true once verified.
+  Future<bool> _verifyNewEmail(String newEmail, String firstName) async {
+    setState(() => _isSaving = true);
+
+    final EmailCodeResult sent = await EmailChangeApi.sendCode(
+      userID: widget.userID,
+      firstName: firstName,
+      newEmail: newEmail,
+    );
+
+    if (!mounted) {
+      return false;
+    }
+    setState(() => _isSaving = false);
+
+    if (!sent.success) {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          icon: Icon(
+            sent.emailTaken
+                ? Icons.alternate_email_rounded
+                : Icons.mark_email_unread_outlined,
+            color: AppColors.danger,
+            size: 32,
+          ),
+          title: Text(
+            sent.emailTaken ? 'Email already in use' : 'Could not send code',
+            textAlign: TextAlign.center,
+          ),
+          content: Text(sent.message, textAlign: TextAlign.center),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return false;
+    }
+
+    final bool? verified = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EmailChangeVerificationPage(
+          userID: widget.userID,
+          firstName: firstName,
+          newEmail: newEmail,
+        ),
+      ),
+    );
+
+    if (verified == true) {
+      return true;
+    }
+
+    // The user went back: keep the current email. Other edits stay in the
+    // form so they can still be saved.
+    if (mounted) {
+      setState(() => _emailController.text = widget.email);
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Email change cancelled. Your email is still ${widget.email}.',
+          ),
+        ),
+      );
+    }
+
+    return false;
+  }
+
   Widget _buildProfilePicture() {
     // Newly selected image.
     if (_selectedImage != null) {
@@ -1147,7 +1220,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
       width: 120,
       height: 120,
       decoration: const BoxDecoration(
-        color: Color(0xFFE8F0FF),
+        color: AppColors.primarySoft,
         shape: BoxShape.circle,
       ),
       child: const Icon(Icons.person, size: 65, color: primaryBlue),
@@ -1169,11 +1242,11 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
         style: const TextStyle(
           fontSize: 15,
           color: darkBlue,
-          fontFamily: 'Biennale',
+          fontFamily: appFontFamily,
         ),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(color: textGrey, fontFamily: 'Biennale'),
+          labelStyle: const TextStyle(color: textGrey, fontFamily: appFontFamily),
           prefixIcon: Icon(icon, color: primaryBlue),
           filled: true,
           fillColor: Colors.white,
@@ -1182,19 +1255,19 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
             vertical: 16,
           ),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(17),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
             borderSide: BorderSide.none,
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(17),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
             borderSide: BorderSide.none,
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(17),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
             borderSide: const BorderSide(color: primaryBlue, width: 1.5),
           ),
           disabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(17),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
             borderSide: BorderSide.none,
           ),
         ),
@@ -1210,7 +1283,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
         padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(17),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
         ),
         child: Row(
           children: [
@@ -1227,7 +1300,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
                     style: TextStyle(
                       fontSize: 12,
                       color: textGrey,
-                      fontFamily: 'Biennale',
+                      fontFamily: appFontFamily,
                     ),
                   ),
 
@@ -1241,7 +1314,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
                       color: darkBlue,
-                      fontFamily: 'Biennale',
+                      fontFamily: appFontFamily,
                     ),
                   ),
                 ],
@@ -1278,7 +1351,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
             color: darkBlue,
             fontSize: 20,
             fontWeight: FontWeight.w700,
-            fontFamily: 'Biennale',
+            fontFamily: appFontFamily,
           ),
         ),
         centerTitle: true,
@@ -1296,7 +1369,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
                   color: primaryBlue,
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  fontFamily: 'Biennale',
+                  fontFamily: appFontFamily,
                 ),
               ),
             ),
@@ -1348,7 +1421,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
                   fontSize: 21,
                   fontWeight: FontWeight.w700,
                   color: darkBlue,
-                  fontFamily: 'Biennale',
+                  fontFamily: appFontFamily,
                 ),
               ),
 
@@ -1360,7 +1433,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
                 style: const TextStyle(
                   fontSize: 13,
                   color: textGrey,
-                  fontFamily: 'Biennale',
+                  fontFamily: appFontFamily,
                 ),
               ),
 
@@ -1374,7 +1447,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: darkBlue,
-                    fontFamily: 'Biennale',
+                    fontFamily: appFontFamily,
                   ),
                 ),
               ),
@@ -1424,11 +1497,8 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
                   child: ElevatedButton(
                     onPressed: _isSaving ? null : _saveChanges,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryBlue,
-                      disabledBackgroundColor: primaryBlue.withOpacity(0.5),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                      disabledBackgroundColor: primaryBlue.withValues(
+                        alpha: 0.5,
                       ),
                     ),
                     child: _isSaving
@@ -1446,7 +1516,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
                               color: Colors.white,
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
-                              fontFamily: 'Biennale',
+                              fontFamily: appFontFamily,
                             ),
                           ),
                   ),
@@ -1458,3 +1528,414 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
     );
   }
 }
+
+// ============================================================
+// EMAIL CHANGE VERIFICATION
+// ------------------------------------------------------------
+// Server endpoints (in api/):
+//   send_email_change_otp.php   POST userID, firstName, newEmail
+//     -> {success, message, code}  code = "EMAIL_TAKEN" if already used
+//   verify_email_change_otp.php POST userID, newEmail, otp
+//     -> {success, message}        updates the email on success
+//   cancel_email_change_otp.php POST userID
+//     -> {success, message}        voids unused codes (email unchanged)
+// ============================================================
+
+class EmailCodeResult {
+  const EmailCodeResult(this.success, this.message, {this.emailTaken = false});
+
+  final bool success;
+  final String message;
+  final bool emailTaken;
+}
+
+class EmailChangeApi {
+  EmailChangeApi._();
+
+  static Future<EmailCodeResult> sendCode({
+    required String userID,
+    required String firstName,
+    required String newEmail,
+  }) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/send_email_change_otp.php'),
+            headers: {'Accept': 'application/json'},
+            body: {
+              'userID': userID,
+              'firstName': firstName,
+              'newEmail': newEmail,
+            },
+          )
+          .timeout(const Duration(seconds: 30));
+
+      final decoded = jsonDecode(response.body);
+      final bool ok = response.statusCode == 200 && decoded['success'] == true;
+      final bool taken = decoded['code']?.toString() == 'EMAIL_TAKEN';
+
+      return EmailCodeResult(
+        ok,
+        decoded['message']?.toString() ??
+            (ok ? 'Verification code sent.' : 'Failed to send the code.'),
+        emailTaken: taken,
+      );
+    } on TimeoutException {
+      return const EmailCodeResult(
+        false,
+        'The server took too long to respond. Please try again.',
+      );
+    } catch (e) {
+      debugPrint('Send email change code error: $e');
+      return const EmailCodeResult(
+        false,
+        'Unable to send the verification code. Check your connection.',
+      );
+    }
+  }
+
+  // Invalidates any unused code so it can no longer change the email.
+  static Future<void> cancel({required String userID}) async {
+    try {
+      await http
+          .post(
+            Uri.parse('$baseUrl/cancel_email_change_otp.php'),
+            headers: {'Accept': 'application/json'},
+            body: {'userID': userID},
+          )
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      // The code still expires on its own after 5 minutes.
+      debugPrint('Cancel email change error: $e');
+    }
+  }
+
+  static Future<EmailCodeResult> verifyCode({
+    required String userID,
+    required String newEmail,
+    required String otp,
+  }) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/verify_email_change_otp.php'),
+            headers: {'Accept': 'application/json'},
+            body: {'userID': userID, 'newEmail': newEmail, 'otp': otp},
+          )
+          .timeout(const Duration(seconds: 30));
+
+      final decoded = jsonDecode(response.body);
+      final bool ok = response.statusCode == 200 && decoded['success'] == true;
+
+      return EmailCodeResult(
+        ok,
+        decoded['message']?.toString() ??
+            (ok ? 'Email verified.' : 'Invalid verification code.'),
+        emailTaken: decoded['code']?.toString() == 'EMAIL_TAKEN',
+      );
+    } catch (e) {
+      debugPrint('Verify email change code error: $e');
+      return const EmailCodeResult(
+        false,
+        'Unable to verify the code. Check your connection.',
+      );
+    }
+  }
+}
+
+class EmailChangeVerificationPage extends StatefulWidget {
+  const EmailChangeVerificationPage({
+    super.key,
+    required this.userID,
+    required this.firstName,
+    required this.newEmail,
+  });
+
+  final String userID;
+  final String firstName;
+  final String newEmail;
+
+  @override
+  State<EmailChangeVerificationPage> createState() =>
+      _EmailChangeVerificationPageState();
+}
+
+class _EmailChangeVerificationPageState
+    extends State<EmailChangeVerificationPage> {
+  final TextEditingController _otpController = TextEditingController();
+
+  bool _isVerifying = false;
+  bool _isResending = false;
+  String? _error;
+
+  // Wait time before another code can be requested.
+  static const int _resendSeconds = 60;
+  int _secondsLeft = _resendSeconds;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startCooldown();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _otpController.dispose();
+    super.dispose();
+  }
+
+  void _startCooldown() {
+    _timer?.cancel();
+    setState(() => _secondsLeft = _resendSeconds);
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      if (_secondsLeft <= 1) {
+        timer.cancel();
+        setState(() => _secondsLeft = 0);
+      } else {
+        setState(() => _secondsLeft--);
+      }
+    });
+  }
+
+  Future<void> _verify() async {
+    final otp = _otpController.text.trim();
+
+    if (!RegExp(r'^\d{6}$').hasMatch(otp)) {
+      setState(() => _error = 'Enter the 6-digit code from your email.');
+      return;
+    }
+
+    setState(() {
+      _isVerifying = true;
+      _error = null;
+    });
+
+    final result = await EmailChangeApi.verifyCode(
+      userID: widget.userID,
+      newEmail: widget.newEmail,
+      otp: otp,
+    );
+
+    if (!mounted) return;
+
+    if (result.success) {
+      Navigator.pop(context, true);
+      return;
+    }
+
+    setState(() {
+      _isVerifying = false;
+      _error = result.message;
+    });
+  }
+
+  // Leave without changing the email (back arrow, system back, or the
+  // "Keep my current email" button).
+  void _cancel() {
+    if (_isVerifying) return;
+    _timer?.cancel();
+    EmailChangeApi.cancel(userID: widget.userID);
+    Navigator.pop(context, false);
+  }
+
+  Future<void> _resend() async {
+    setState(() {
+      _isResending = true;
+      _error = null;
+    });
+
+    final result = await EmailChangeApi.sendCode(
+      userID: widget.userID,
+      firstName: widget.firstName,
+      newEmail: widget.newEmail,
+    );
+
+    if (!mounted) return;
+    setState(() => _isResending = false);
+
+    if (result.success) {
+      _otpController.clear();
+      _startCooldown();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('A new code was sent to your email.')),
+      );
+    } else {
+      setState(() => _error = result.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      // Route the phone's back gesture through _cancel as well.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _cancel();
+      },
+      child: Scaffold(
+      backgroundColor: AppColors.surface,
+      appBar: AppBar(
+        backgroundColor: AppColors.surface,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+          onPressed: _isVerifying ? null : _cancel,
+        ),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: const Icon(
+                  Icons.mark_email_read_outlined,
+                  color: AppColors.primary,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text('Verify Your New Email', style: AppText.pageTitle),
+              const SizedBox(height: 8),
+              const Text(
+                'To make sure this email is active and belongs to you, we sent '
+                'a six-digit code to:',
+                style: AppText.subtitle,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                widget.newEmail,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontFamily: appFontFamily,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 32),
+              const Text('Verification Code', style: AppText.fieldLabel),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _otpController,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                autofocus: true,
+                textAlign: TextAlign.center,
+                onSubmitted: (_) => _isVerifying ? null : _verify(),
+                style: const TextStyle(
+                  fontFamily: appFontFamily,
+                  fontSize: 20,
+                  letterSpacing: 8,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.ink,
+                ),
+                decoration: InputDecoration(
+                  hintText: '••••••',
+                  counterText: '',
+                  errorText: _error,
+                  errorMaxLines: 3,
+                ),
+              ),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _isVerifying ? null : _verify,
+                  child: _isVerifying
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Verify Email'),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Center(
+                child: _secondsLeft > 0
+                    ? Text(
+                        'Resend code in ${_secondsLeft}s',
+                        style: const TextStyle(
+                          fontFamily: appFontFamily,
+                          fontSize: 13,
+                          color: AppColors.textMuted,
+                        ),
+                      )
+                    : TextButton(
+                        onPressed: _isResending ? null : _resend,
+                        child: Text(
+                          _isResending ? 'Sending...' : 'Resend Code',
+                        ),
+                      ),
+              ),
+              const SizedBox(height: 28),
+
+              // Way out for users who changed their mind or can't open
+              // the new inbox. Nothing is changed.
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceMuted,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  border: Border.all(color: AppColors.divider),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Can't access this email?",
+                      style: AppText.fieldLabel,
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'If you changed your mind, the address is no longer '
+                      'active, or you can\'t sign in to it, go back. Your '
+                      'current email will stay the same.',
+                      style: TextStyle(
+                        fontFamily: appFontFamily,
+                        fontSize: 13,
+                        height: 1.45,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(46),
+                          backgroundColor: AppColors.surface,
+                        ),
+                        onPressed: _isVerifying ? null : _cancel,
+                        child: const Text('Keep My Current Email'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+            ],
+          ),
+        ),
+      ),
+    ),
+    );
+  }
+}
+

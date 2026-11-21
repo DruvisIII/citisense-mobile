@@ -1,7 +1,6 @@
-// import 'dart:math';
-
 import 'package:citisense/login.dart';
 import 'package:flutter/material.dart';
+import 'package:citisense/app_theme.dart';
 import 'package:citisense/createAccount.dart';
 
 class LandingPage extends StatelessWidget {
@@ -10,184 +9,179 @@ class LandingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // appBar: AppBar(
-      //   backgroundColor: Color(0xFFF5F5F5),
-      //   title: const Text('CitiSense'),
-      // ),
-      body: SingleChildScrollView(
-        child: SizedBox(
-          width: double.infinity,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: [
-              SizedBox(height: 130),
-              Container(
-                height: 180,
-                width: 180,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(300),
-                  // color: Colors.blueAccent,
-                ),
-                child: ClipOval(
-                  child: Image.asset(
-                    'assets/citisense logo image.png',
-                    // color: Colors.redAccent,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-              Stack(
-                alignment: Alignment.bottomCenter,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: const Text(
+      backgroundColor: AppColors.surface,
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: ConstrainedBox(
+              // Fill the screen so the buttons sit near the bottom on tall
+              // phones, but still scroll on small ones.
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: IntrinsicHeight(
+                child: Column(
+                  children: [
+                    const SizedBox(height: 64),
+
+                    // ------------------------------------------------
+                    // LOGO
+                    // ------------------------------------------------
+                    Container(
+                      height: 168,
+                      width: 168,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: AppShadows.card,
+                      ),
+                      child: ClipOval(
+                        child: Image.asset(
+                          'assets/citisense logo image.png',
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // ------------------------------------------------
+                    // APP NAME + UNDERLINE
+                    // ------------------------------------------------
+                    const Text(
                       'CitiSense',
                       style: TextStyle(
                         fontSize: 30,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF5887E0),
-                        fontFamily: 'Biennale',
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primary,
+                        fontFamily: appFontFamily,
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: 48,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        color: AppColors.primary,
+                      ),
+                    ),
 
-                  Container(
-                    width: 50, // ← underline length
-                    height: 4, // ← underline thickness
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      color: const Color(0xFF5887E0),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 40), //child: Container(color: Colors.amber)),
-              Container(
-                // color: Colors.red,
-                width: 279,
-                child: const Text(
-                  'Making Every Report',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 30,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A1A1A),
-                    fontFamily: 'Biennale',
-                  ),
-                ),
-              ),
-              const Text(
-                'Count',
-                style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF5887E0),
-                  fontFamily: 'Biennale',
-                ),
-              ),
-              Container(
-                width: 200,
-                margin: const EdgeInsets.only(top: 15),
-                // color: Colors.grey[200],
-                child: const Text(
-                  'Join your community and start reporting issues',
-                  softWrap: true,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Color(0xFF1A1A1A),
-                    fontFamily: 'Biennale',
-                  ),
-                ),
-              ),
-              SizedBox(height: 130),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF5887E0),
-                  minimumSize: const Size(286, 60),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: const Text(
-                  'Create Account',
-                  style: TextStyle(color: Colors.white),
-                ),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const CreateAccount(),
-                    ),
-                  );
-                },
-              ),
-              // Container(
-              //   width: 279,
-              //   height: 60,
-              //   margin: EdgeInsets.only(top: 10),
-              //   decoration: BoxDecoration(
-              //     borderRadius: BorderRadius.circular(10),
-              //     border: Border.all(color: Color(0xFF5887E0), width: 2),
-              //   ),
-              //   alignment: Alignment.center,
-              //   child: const Text(
-              //     'Log In',
-              //     style: TextStyle(
-              //       fontSize: 16,
-              //       color: Color(0xFF5887E0),
-              //       fontFamily: 'Biennale',
-              //     ),
-              //   ),
-              // ),
-              SizedBox(height: 10),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFFFFFF),
-                  minimumSize: const Size(286, 60),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    side: BorderSide(color: Color(0xFF5887E0), width: 2),
-                  ),
-                ),
-                child: const Text(
-                  'Log In',
-                  style: TextStyle(color: Color(0xFF5887E0)),
-                ),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const LoginPage()),
-                  );
-                },
-              ),
-              Container(
-                // color: Colors.amber,
-                margin: EdgeInsets.only(top: 20),
-                // width: 230,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      'By continuing, you agree to our',
+                    const SizedBox(height: 40),
+
+                    // ------------------------------------------------
+                    // TAGLINE
+                    // ------------------------------------------------
+                    const Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(text: 'Making Every Report\n'),
+                          TextSpan(
+                            text: 'Count',
+                            style: TextStyle(color: AppColors.primary),
+                          ),
+                        ],
+                      ),
+                      textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Color(0xFFB3BAC5),
-                        fontFamily: 'Biennale',
+                        fontSize: 30,
+                        height: 1.2,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.ink,
+                        fontFamily: appFontFamily,
                       ),
                     ),
-                    const Text(
-                      'Terms & Conditions',
-                      style: TextStyle(
-                        color: Color(0xFF5887E0),
-                        fontFamily: 'Biennale',
+
+                    const SizedBox(height: 14),
+
+                    const SizedBox(
+                      width: 240,
+                      child: Text(
+                        'Join your community and start reporting issues',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          height: 1.45,
+                          color: AppColors.textSecondary,
+                          fontFamily: appFontFamily,
+                        ),
                       ),
                     ),
+
+                    const Spacer(),
+                    const SizedBox(height: 48),
+
+                    // ------------------------------------------------
+                    // ACTIONS
+                    // ------------------------------------------------
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 360),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(56),
+                            ),
+                            child: const Text('Create Account'),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const CreateAccount(),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(56),
+                              backgroundColor: AppColors.surface,
+                            ),
+                            child: const Text('Log In'),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const LoginPage(),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // ------------------------------------------------
+                    // TERMS
+                    // ------------------------------------------------
+                    const Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(text: 'By continuing, you agree to our '),
+                          TextSpan(
+                            text: 'Terms & Conditions',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textMuted,
+                        fontFamily: appFontFamily,
+                      ),
+                    ),
+
+                    const SizedBox(height: 32),
                   ],
                 ),
               ),
-              SizedBox(height: 50),
-            ],
+            ),
           ),
         ),
       ),

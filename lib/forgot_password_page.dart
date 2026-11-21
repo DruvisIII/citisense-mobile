@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'package:citisense/api_config.dart';
 
 import 'package:flutter/material.dart';
+import 'package:citisense/app_theme.dart';
 import 'package:http/http.dart' as http;
 
 class ForgotPasswordPage extends StatefulWidget {
@@ -12,7 +14,7 @@ class ForgotPasswordPage extends StatefulWidget {
 
 class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   // Keep this IP address synchronized with login.dart.
-  static const String _apiBaseUrl = 'http://10.119.145.252/citisense/api';
+  static const String _apiBaseUrl = '$serverBaseUrl/api';
 
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();
@@ -29,9 +31,9 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   bool _obscureNewPassword = true;
   bool _obscureConfirmPassword = true;
 
-  static const Color _primaryBlue = Color(0xFF2563D9);
-  static const Color _darkBlue = Color(0xFF173B70);
-  static const Color _textGrey = Color(0xFF777777);
+  static const Color _primaryBlue = AppColors.primary;
+  static const Color _darkBlue = AppColors.ink;
+  static const Color _textGrey = AppColors.textSecondary;
 
   @override
   void dispose() {
@@ -85,7 +87,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: error ? Colors.red.shade700 : _darkBlue,
+        backgroundColor: error ? AppColors.danger : _darkBlue,
       ),
     );
   }
@@ -221,26 +223,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   // ------------------------------------------------------------
 
   InputDecoration _inputDecoration(String label, {Widget? suffixIcon}) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: const TextStyle(color: _textGrey, fontFamily: 'Biennale'),
-      suffixIcon: suffixIcon,
-      filled: true,
-      fillColor: const Color(0xFFF7F8FA),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _primaryBlue, width: 1.4),
-      ),
-    );
+    // Borders, fill and colors come from AppTheme so every form matches.
+    return InputDecoration(labelText: label, suffixIcon: suffixIcon);
   }
 
   // ------------------------------------------------------------
@@ -253,32 +237,40 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       height: 52,
       child: ElevatedButton(
         onPressed: _isLoading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _primaryBlue,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
         child: _isLoading
             ? const SizedBox(
                 width: 22,
                 height: 22,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2.3,
+                  strokeWidth: 2.5,
                   color: Colors.white,
                 ),
               )
-            : Text(
-                label,
-                style: const TextStyle(
-                  fontFamily: 'Biennale',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
-              ),
+            : Text(label),
       ),
+    );
+  }
+
+  // ------------------------------------------------------------
+  // STEP INDICATOR
+  // ------------------------------------------------------------
+
+  Widget _buildStepIndicator() {
+    return Row(
+      children: List.generate(3, (index) {
+        final reached = index <= _step;
+        return Expanded(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            height: 4,
+            margin: EdgeInsets.only(right: index == 2 ? 0 : 6),
+            decoration: BoxDecoration(
+              color: reached ? AppColors.primary : AppColors.divider,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+        );
+      }),
     );
   }
 
@@ -296,22 +288,25 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
             autocorrect: false,
-            decoration: _inputDecoration('Registered email address'),
+            style: const TextStyle(fontFamily: appFontFamily, fontSize: 14),
+            decoration: _inputDecoration(
+              'Registered email address',
+            ).copyWith(prefixIcon: const Icon(Icons.email_outlined)),
           ),
 
-          const SizedBox(height: 18),
+          const SizedBox(height: 12),
 
           const Text(
             'A verification code will be sent to your registered email address.',
             style: TextStyle(
               fontSize: 12,
-              fontFamily: 'Biennale',
+              fontFamily: appFontFamily,
               color: _textGrey,
               height: 1.5,
             ),
           ),
 
-          const SizedBox(height: 22),
+          const SizedBox(height: 24),
 
           _buildPrimaryButton('Send Verification Code', _requestCode),
         ],
@@ -323,27 +318,27 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Enter the six-digit code sent to your registered email address.',
-            style: TextStyle(
-              fontFamily: 'Biennale',
-              color: _textGrey,
-              height: 1.5,
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
           TextField(
             controller: _otpController,
             keyboardType: TextInputType.number,
             maxLength: 6,
-            decoration: _inputDecoration('6-digit verification code'),
+            style: const TextStyle(
+              fontFamily: appFontFamily,
+              fontSize: 18,
+              letterSpacing: 6,
+              fontWeight: FontWeight.w700,
+              color: AppColors.ink,
+            ),
+            decoration: _inputDecoration(
+              '6-digit verification code',
+            ).copyWith(counterText: ''),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
           _buildPrimaryButton('Verify Code', _verifyCode),
+
+          const SizedBox(height: 8),
 
           Center(
             child: TextButton(
@@ -357,7 +352,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                     },
               child: const Text(
                 'Change email address',
-                style: TextStyle(fontFamily: 'Biennale'),
+                style: TextStyle(fontFamily: appFontFamily),
               ),
             ),
           ),
@@ -371,6 +366,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         TextField(
           controller: _newPasswordController,
           obscureText: _obscureNewPassword,
+          style: const TextStyle(fontFamily: appFontFamily, fontSize: 14),
           decoration: _inputDecoration(
             'New password',
             suffixIcon: IconButton(
@@ -380,17 +376,20 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                 });
               },
               icon: Icon(
-                _obscureNewPassword ? Icons.visibility_off : Icons.visibility,
+                _obscureNewPassword
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
               ),
             ),
           ),
         ),
 
-        const SizedBox(height: 15),
+        const SizedBox(height: 16),
 
         TextField(
           controller: _confirmPasswordController,
           obscureText: _obscureConfirmPassword,
+          style: const TextStyle(fontFamily: appFontFamily, fontSize: 14),
           decoration: _inputDecoration(
             'Confirm new password',
             suffixIcon: IconButton(
@@ -401,8 +400,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
               },
               icon: Icon(
                 _obscureConfirmPassword
-                    ? Icons.visibility_off
-                    : Icons.visibility,
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
               ),
             ),
           ),
@@ -415,14 +414,14 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           child: Text(
             'Use at least 8 characters.',
             style: TextStyle(
-              fontFamily: 'Biennale',
-              fontSize: 11,
+              fontFamily: appFontFamily,
+              fontSize: 12,
               color: _textGrey,
             ),
           ),
         ),
 
-        const SizedBox(height: 22),
+        const SizedBox(height: 24),
 
         _buildPrimaryButton('Reset Password', _resetPassword),
       ],
@@ -448,58 +447,65 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     ];
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
+        backgroundColor: AppColors.surface,
         leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Colors.black,
-            size: 20,
-          ),
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(
-                Icons.lock_reset_rounded,
-                size: 48,
-                color: _primaryBlue,
+              const SizedBox(height: 12),
+
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: const Icon(
+                  Icons.lock_reset_rounded,
+                  size: 30,
+                  color: _primaryBlue,
+                ),
               ),
 
-              const SizedBox(height: 22),
+              const SizedBox(height: 20),
+
+              _buildStepIndicator(),
+
+              const SizedBox(height: 8),
 
               Text(
-                titles[_step],
+                'Step ${_step + 1} of 3',
                 style: const TextStyle(
-                  fontSize: 29,
-                  fontFamily: 'Biennale',
+                  fontFamily: appFontFamily,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: Colors.black,
+                  color: AppColors.primary,
                 ),
               ),
 
-              const SizedBox(height: 9),
+              const SizedBox(height: 12),
 
-              Text(
-                descriptions[_step],
-                style: const TextStyle(
-                  fontSize: 13,
-                  height: 1.5,
-                  fontFamily: 'Biennale',
-                  color: _textGrey,
-                ),
-              ),
+              Text(titles[_step], style: AppText.pageTitle),
 
-              const SizedBox(height: 30),
+              const SizedBox(height: 8),
+
+              Text(descriptions[_step], style: AppText.subtitle),
+
+              const SizedBox(height: 32),
 
               _buildStepContent(),
+
+              const SizedBox(height: 32),
             ],
           ),
         ),

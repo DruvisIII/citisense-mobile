@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'package:citisense/api_config.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:citisense/app_theme.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_messaging/firebase_messaging.dart';
 
@@ -22,7 +24,7 @@ class _LoginPageState extends State<LoginPage> {
 
   static const String _loginUrl =
       // 'http://10.186.51.252/citisense/api/login.php';
-      'http://10.119.145.252/citisense/api/login.php';
+      '$serverBaseUrl/api/login.php';
   //'http://10.127.214.252/citisense/api/login.php';
   //'http://192.168.83.252/citisense/api/login.php';
 
@@ -250,7 +252,7 @@ class _LoginPageState extends State<LoginPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Login successful!'),
-          backgroundColor: Colors.green,
+          backgroundColor: AppColors.success,
         ),
       );
 
@@ -264,7 +266,7 @@ class _LoginPageState extends State<LoginPage> {
             content: Text(
               'Your account has no assigned barangay. Please contact the administrator.',
             ),
-            backgroundColor: Colors.orange,
+            backgroundColor: AppColors.warning,
           ),
         );
 
@@ -304,7 +306,7 @@ class _LoginPageState extends State<LoginPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Something went wrong: ${e.toString()}'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppColors.danger,
         ),
       );
     }
@@ -317,20 +319,15 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
 
       // --------------------------------------------------------
       // APP BAR
       // --------------------------------------------------------
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
+        backgroundColor: AppColors.surface,
         leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Colors.black,
-            size: 20,
-          ),
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
           onPressed: () {
             Navigator.pop(context);
           },
@@ -342,253 +339,151 @@ class _LoginPageState extends State<LoginPage> {
       // --------------------------------------------------------
       body: SafeArea(
         child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 30),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 12),
 
-                // ------------------------------------------------
-                // TITLE
-                // ------------------------------------------------
-                const Text(
-                  'Welcome Back!',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontFamily: 'Biennale',
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black,
-                  ),
+              // ------------------------------------------------
+              // TITLE
+              // ------------------------------------------------
+              const Text('Welcome Back!', style: AppText.pageTitle),
+
+              const SizedBox(height: 8),
+
+              const Text(
+                'Log in to continue to CitiSense.',
+                style: AppText.subtitle,
+              ),
+
+              const SizedBox(height: 32),
+
+              // ------------------------------------------------
+              // EMAIL
+              // ------------------------------------------------
+              const Text('Email', style: AppText.fieldLabel),
+
+              const SizedBox(height: 8),
+
+              TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                autocorrect: false,
+                style: const TextStyle(fontFamily: appFontFamily, fontSize: 14),
+                decoration: const InputDecoration(
+                  hintText: 'Enter your email',
+                  prefixIcon: Icon(Icons.email_outlined),
                 ),
+              ),
 
-                const SizedBox(height: 8),
+              const SizedBox(height: 20),
 
-                const Text(
-                  'Log in to continue to CitiSense.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontFamily: 'Biennale',
-                    color: Colors.grey,
-                  ),
-                ),
+              // ------------------------------------------------
+              // PASSWORD
+              // ------------------------------------------------
+              const Text('Password', style: AppText.fieldLabel),
 
-                const SizedBox(height: 35),
+              const SizedBox(height: 8),
 
-                // ------------------------------------------------
-                // EMAIL LABEL
-                // ------------------------------------------------
-                const Text(
-                  'Email',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontFamily: 'Biennale',
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                // ------------------------------------------------
-                // EMAIL FIELD
-                // ------------------------------------------------
-                TextField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  style: const TextStyle(fontFamily: 'Biennale', fontSize: 14),
-                  decoration: InputDecoration(
-                    hintText: 'Enter your email',
-                    hintStyle: const TextStyle(
-                      fontFamily: 'Biennale',
-                      fontSize: 14,
-                      color: Colors.grey,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.email_outlined,
-                      color: Colors.blueGrey,
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: Colors.blueGrey),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF5887E0),
-                        width: 2,
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // ------------------------------------------------
-                // PASSWORD LABEL
-                // ------------------------------------------------
-                const Text(
-                  'Password',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontFamily: 'Biennale',
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                // ------------------------------------------------
-                // PASSWORD FIELD
-                // ------------------------------------------------
-                TextField(
-                  controller: _passwordController,
-                  obscureText: _obscurePassword,
-                  style: const TextStyle(fontFamily: 'Biennale', fontSize: 14),
-                  decoration: InputDecoration(
-                    hintText: 'Enter your password',
-                    hintStyle: const TextStyle(
-                      fontFamily: 'Biennale',
-                      fontSize: 14,
-                      color: Colors.grey,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.lock_outline,
-                      color: Colors.blueGrey,
-                    ),
-                    suffixIcon: IconButton(
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_off_outlined
-                            : Icons.visibility_outlined,
-                        color: Colors.blueGrey,
-                      ),
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: Colors.blueGrey),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF5887E0),
-                        width: 2,
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                // ------------------------------------------------
-                // FORGOT PASSWORD
-                // ------------------------------------------------
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
+              TextField(
+                controller: _passwordController,
+                obscureText: _obscurePassword,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) {
+                  if (!_isLoading) _login();
+                },
+                style: const TextStyle(fontFamily: appFontFamily, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Enter your password',
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  suffixIcon: IconButton(
                     onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const ForgotPasswordPage(),
-                        ),
-                      );
+                      setState(() {
+                        _obscurePassword = !_obscurePassword;
+                      });
                     },
-                    child: const Text(
-                      'Forgot Password?',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontFamily: 'Biennale',
-                        color: Color(0xFF5887E0),
-                        fontWeight: FontWeight.w600,
-                      ),
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
                     ),
                   ),
                 ),
+              ),
 
-                const SizedBox(height: 15),
-
-                // ------------------------------------------------
-                // LOGIN BUTTON
-                // ------------------------------------------------
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _login,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF5887E0),
-                      disabledBackgroundColor: Colors.grey.shade300,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+              // ------------------------------------------------
+              // FORGOT PASSWORD
+              // ------------------------------------------------
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ForgotPasswordPage(),
                       ),
-                    ),
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 23,
-                            height: 23,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text(
-                            'Log In',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontFamily: 'Biennale',
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
+                    );
+                  },
+                  child: const Text(
+                    'Forgot Password?',
+                    style: TextStyle(fontSize: 13, fontFamily: appFontFamily),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // ------------------------------------------------
+              // LOGIN BUTTON
+              // ------------------------------------------------
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _login,
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
                           ),
+                        )
+                      : const Text('Log In'),
+                ),
+              ),
+
+              const SizedBox(height: 28),
+
+              // ------------------------------------------------
+              // SIGN UP
+              // ------------------------------------------------
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    "Don't have an account? ",
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontFamily: appFontFamily,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
-                ),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pop(context);
+                    },
+                    child: const Text('Sign Up', style: AppText.link),
+                  ),
+                ],
+              ),
 
-                const SizedBox(height: 30),
-
-                // ------------------------------------------------
-                // SIGN UP
-                // ------------------------------------------------
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      "Don't have an account? ",
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontFamily: 'Biennale',
-                        color: Colors.grey,
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pop(context);
-                      },
-                      child: const Text(
-                        'Sign Up',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontFamily: 'Biennale',
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF5887E0),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 30),
-              ],
-            ),
+              const SizedBox(height: 32),
+            ],
           ),
         ),
       ),

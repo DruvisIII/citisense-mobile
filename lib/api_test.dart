@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:citisense/api_config.dart';
 import 'package:http/http.dart' as http;
 
 class ApiTest extends StatefulWidget {
@@ -12,7 +13,7 @@ class _ApiTestState extends State<ApiTest> {
   String result = 'Testing API...';
 
   Future<void> testApi() async {
-    const String url = 'http://192.168.1.48/citisense/api/test_api.php';
+    const String url = '$serverBaseUrl/api/test_api.php';
     //'http://10.127.214.252/citisense/api/test_api.php';
     try {
       final response = await http.get(Uri.parse(url));

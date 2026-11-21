@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'package:citisense/api_config.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:citisense/app_theme.dart';
+import 'package:citisense/mascot.dart';
+import 'package:citisense/app_settings.dart';
 import 'package:exif/exif.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geocoding/geocoding.dart';
@@ -10,20 +14,21 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 // ============================================================
 // AI CLASSIFICATION BACKEND
 // ============================================================
 
 const String aiClassificationUrl =
-    'http://192.168.1.48/citisense/api/classify_image.php';
+    '$serverBaseUrl/api/classify_image.php';
 
 // ============================================================
 // REPORT SUBMISSION BACKEND
 // ============================================================
 
 const String submitReportUrl =
-    'http://10.119.145.252/citisense/api/submit_report.php';
+    '$serverBaseUrl/api/submit_report.php';
 
 // ============================================================
 // REPORT ISSUE OVERLAY
@@ -72,8 +77,23 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
 
   String? _aiMessage;
 
-  static const Color primaryBlue = Color(0xFF2563D9);
-  static const Color darkBlue = Color(0xFF173D78);
+  // Short note shown under the Location button (e.g. no GPS in photo).
+  String? _locationNote;
+  bool _isLocating = false;
+
+  // Mirrors Settings > AI Insights.
+  bool _aiEnabled = true;
+
+  // Turns on red highlights for missing fields after a submit attempt.
+  bool _showMissingFields = false;
+
+  @override
+  void initState() {
+    super.initState();
+    AiInsightsPreference.isEnabled().then((enabled) {
+      if (mounted) setState(() => _aiEnabled = enabled);
+    });
+  }
 
   final List<String> _categories = [
     'Waste Accumulation',
@@ -99,11 +119,18 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
 
   Future<void> _pickImage(ImageSource source) async {
     try {
+      // Gallery: Android hides the GPS data inside photos unless the app
+      // has "media location" access, so ask for it before picking.
+      if (source == ImageSource.gallery) {
+        await _requestMediaLocationAccess();
+      }
+
       final XFile? image = await _picker.pickImage(
         source: source,
         // Keep the original image so gallery EXIF GPS metadata is not
         // discarded by image-picker compression before we read it.
         imageQuality: null,
+        requestFullMetadata: true,
       );
 
       if (image == null || !mounted) return;
@@ -118,49 +145,85 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
         _selectedLocation = null;
         _selectedAddress = null;
         _aiMessage = null;
+        _locationNote = null;
+        _showMissingFields = false;
       });
 
-      LatLng? suggestedLocation;
+      // AI Insights on: analyze the photo and auto-select the category.
+      // AI Insights off: skip it; the user picks the category.
+      final bool aiEnabled = await AiInsightsPreference.isEnabled();
+      if (!mounted) return;
+      setState(() => _aiEnabled = aiEnabled);
+
+      final Future<void> analysis = aiEnabled
+          ? _analyzeImage(imageBytes)
+          : Future<void>.value();
 
       if (source == ImageSource.camera) {
-        // CAMERA:
-        // Get the user's current GPS location.
-        suggestedLocation = await _getCurrentDeviceLocation();
+        // CAMERA: pin the user's live location automatically.
+        // Give Android a moment to bring the app back from the camera
+        // before showing the permission prompt.
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+
+        setState(() => _isLocating = true);
+        final LatLng? liveLocation = await _getCurrentDeviceLocation();
+        if (!mounted) return;
+        setState(() => _isLocating = false);
+
+        if (liveLocation != null) {
+          await _setSuggestedLocation(liveLocation);
+          if (mounted) {
+            setState(() => _locationNote = 'Pinned to your current location.');
+          }
+        } else {
+          setState(() {
+            _locationNote =
+                'Your location could not be found. '
+                'Tap "Set Location on Map" to pin it.';
+          });
+        }
       } else {
-        // GALLERY:
-        // First, try extracting the original GPS coordinates
-        // embedded in the image's EXIF metadata.
-        suggestedLocation = await _getGpsLocationFromExif(imageBytes);
+        // GALLERY: use the GPS coordinates saved inside the photo.
+        final LatLng? photoLocation = await _getGpsLocationFromExif(
+          imageBytes,
+        );
+        if (!mounted) return;
 
-        // FALLBACK:
-        // If the image has no EXIF GPS metadata, get the
-        // user's current GPS location instead.
-        if (suggestedLocation == null) {
-          debugPrint(
-            'No EXIF GPS found. Getting current device location instead.',
-          );
-
-          suggestedLocation = await _getCurrentDeviceLocation();
+        if (photoLocation != null) {
+          await _setSuggestedLocation(photoLocation);
+          if (mounted) {
+            setState(() => _locationNote = 'Pinned using the photo\'s location.');
+          }
+        } else {
+          // No GPS in the photo: the user pins it manually. The map will
+          // open at their live location.
+          setState(() {
+            _locationNote =
+                'This photo has no location data. '
+                'Tap "Set Location on Map" to pin it.';
+          });
         }
       }
 
-      if (!mounted) return;
-
-      if (suggestedLocation != null) {
-        await _setSuggestedLocation(suggestedLocation);
-      } else {
-        _showMessage(
-          'Unable to determine your location. '
-          'Please pin the issue location manually.',
-        );
-      }
-
-      // Continue AI image classification.
-      await _analyzeImage(imageBytes);
+      await analysis;
     } catch (e) {
       debugPrint('Image selection error: $e');
-
+      if (mounted) setState(() => _isLocating = false);
       _showMessage('Unable to select the photo.');
+    }
+  }
+
+  // ============================================================
+  // MEDIA LOCATION ACCESS (needed to read GPS from gallery photos)
+  // ============================================================
+
+  Future<void> _requestMediaLocationAccess() async {
+    try {
+      final status = await Permission.accessMediaLocation.request();
+      debugPrint('Media location permission: $status');
+    } catch (e) {
+      // Older Android versions do not have this permission; that's fine.
+      debugPrint('Media location permission not available: $e');
     }
   }
 
@@ -243,43 +306,161 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
 
   Future<LatLng?> _getCurrentDeviceLocation() async {
     try {
-      final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      // ----------------------------------------------------------
+      // 1. LOCATION (GPS) MUST BE ON
+      // ----------------------------------------------------------
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        final openSettings = await _showLocationProblem(
+          title: 'Turn on Location',
+          message:
+              'Your phone\'s Location (GPS) is off. Turn it on so '
+              'CitiSense can pin where the issue is.',
+          actionLabel: 'Turn On',
+        );
+        if (!openSettings) return null;
 
-      if (!serviceEnabled) {
-        _showMessage('Please turn on your device location services.');
-        return null;
+        await Geolocator.openLocationSettings();
+        await _waitForAppResume();
+
+        if (!await Geolocator.isLocationServiceEnabled()) {
+          _showMessage('Location is still off.');
+          return null;
+        }
       }
 
+      // ----------------------------------------------------------
+      // 2. PERMISSION
+      // "Ask every time" -> checkPermission returns denied, and
+      // requestPermission shows Android's permission prompt.
+      // ----------------------------------------------------------
       LocationPermission permission = await Geolocator.checkPermission();
+      debugPrint('Location permission status: $permission');
 
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
+        debugPrint('Location permission after request: $permission');
       }
 
+      // "Don't allow" -> Android will not show the prompt anymore, so ask
+      // the user to turn it on in the app's settings page.
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        _showMessage(
-          'Location permission is unavailable. '
-          'Please pin the issue location manually.',
+        final openSettings = await _showLocationProblem(
+          title: 'Allow location access',
+          message:
+              'CitiSense needs your location to pin the issue. In Settings, '
+              'tap Permissions > Location and choose '
+              '"Allow only while using the app" or "Ask every time".',
+          actionLabel: 'Open Settings',
         );
-        return null;
+        if (!openSettings) return null;
+
+        await Geolocator.openAppSettings();
+        await _waitForAppResume();
+
+        permission = await Geolocator.checkPermission();
+        debugPrint('Location permission after settings: $permission');
+
+        // "Ask every time" chosen in Settings still needs the prompt.
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+        }
+
+        if (permission == LocationPermission.denied ||
+            permission == LocationPermission.deniedForever) {
+          _showMessage('Location permission was not allowed.');
+          return null;
+        }
       }
 
-      final Position position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 20),
-        ),
-      );
-
-      return LatLng(position.latitude, position.longitude);
-    } on TimeoutException {
-      _showMessage('Getting your current location took too long.');
-      return null;
+      // ----------------------------------------------------------
+      // 3. GET THE LIVE POSITION
+      // ----------------------------------------------------------
+      try {
+        final Position position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 20),
+          ),
+        );
+        return LatLng(position.latitude, position.longitude);
+      } on TimeoutException {
+        // Indoors the GPS can be slow; fall back to the last known fix.
+        final Position? lastKnown = await Geolocator.getLastKnownPosition();
+        if (lastKnown != null) {
+          return LatLng(lastKnown.latitude, lastKnown.longitude);
+        }
+        _showMessage('Getting your current location took too long.');
+        return null;
+      }
     } catch (e) {
       debugPrint('Current location error: $e');
+      await _showLocationProblem(
+        title: 'Unable to get your location',
+        message: e.toString().replaceFirst('Exception: ', ''),
+      );
       return null;
     }
+  }
+
+  // Waits until the user comes back from a Settings screen.
+  Future<void> _waitForAppResume() async {
+    final completer = Completer<void>();
+    final listener = AppLifecycleListener(
+      onResume: () {
+        if (!completer.isCompleted) completer.complete();
+      },
+    );
+    try {
+      await completer.future.timeout(const Duration(minutes: 2));
+    } on TimeoutException {
+      // User never came back; continue with whatever state we have.
+    } finally {
+      listener.dispose();
+    }
+    // Let Android finish applying the new setting.
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+  }
+
+  // Shown as a dialog (not a snackbar) because this screen is itself a
+  // dialog, and snackbars appear behind it where they can't be seen.
+  // Returns true when the user taps the action button.
+  Future<bool> _showLocationProblem({
+    required String title,
+    required String message,
+    String? actionLabel,
+  }) async {
+    if (!mounted) return false;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(
+          Icons.location_on_outlined,
+          color: AppColors.primary,
+          size: 32,
+        ),
+        title: Text(title, textAlign: TextAlign.center),
+        content: Text(message, textAlign: TextAlign.center),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(
+              actionLabel == null ? 'OK' : 'Not Now',
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+          ),
+          if (actionLabel != null)
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(actionLabel),
+            ),
+        ],
+      ),
+    );
+
+    return result ?? false;
   }
 
   // ============================================================
@@ -520,7 +701,10 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
     LatLng? mapCenter = _selectedLocation;
 
     if (mapCenter == null) {
+      setState(() => _isLocating = true);
       mapCenter = await _getCurrentDeviceLocation();
+      if (!mounted) return;
+      setState(() => _isLocating = false);
     }
 
     if (!mounted) return;
@@ -533,6 +717,7 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
         return MapLocationPicker(
           initialLocation: mapCenter,
           requireMapTap: requireManualPin,
+          hasLiveLocation: mapCenter != null,
         );
       },
     );
@@ -540,6 +725,7 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
     if (result == null || !mounted) return;
 
     await _setSuggestedLocation(result);
+    if (mounted) setState(() => _locationNote = 'Location pinned on the map.');
 
     if (_selectedAddress == null || _selectedAddress!.trim().isEmpty) {
       _showMessage(
@@ -582,27 +768,58 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
     // ----------------------------------------------------------
 
     if (_selectedImageBytes == null) {
-      _showMessage('Please upload a photo first.');
+      await _showFormPrompt(
+        icon: Icons.add_a_photo_outlined,
+        title: 'Add a photo',
+        message: 'Please take or upload a photo of the issue first.',
+      );
 
       return;
     }
 
     // ----------------------------------------------------------
-    // CHECK CATEGORY
+    // CHECK CATEGORY + LOCATION (prompt for whichever is missing)
     // ----------------------------------------------------------
 
-    if (_selectedCategory == null) {
-      _showMessage('Please select an issue category.');
+    final bool missingCategory = _selectedCategory == null;
+    final bool missingLocation = _selectedLocation == null;
 
-      return;
-    }
+    if (missingCategory || missingLocation) {
+      setState(() => _showMissingFields = true);
 
-    // ----------------------------------------------------------
-    // CHECK LOCATION
-    // ----------------------------------------------------------
+      final String title;
+      final String message;
+      final IconData icon;
 
-    if (_selectedLocation == null) {
-      _showMessage('Please pin the issue location on the map.');
+      if (missingCategory && missingLocation) {
+        title = 'Select a category and location';
+        message =
+            'Please choose the issue category and pin the location of the '
+            'issue on the map before submitting.';
+        icon = Icons.checklist_rounded;
+      } else if (missingCategory) {
+        title = 'Select a category';
+        message =
+            'Please choose the issue category before submitting your report.';
+        icon = Icons.category_outlined;
+      } else {
+        title = 'Select a location';
+        message =
+            'Please pin the location of the issue on the map before '
+            'submitting your report.';
+        icon = Icons.location_on_outlined;
+      }
+
+      final bool pinNow = await _showFormPrompt(
+        icon: icon,
+        title: title,
+        message: message,
+        actionLabel: missingLocation ? 'Pin Location' : null,
+      );
+
+      if (pinNow && mounted) {
+        await _openMapPicker();
+      }
 
       return;
     }
@@ -612,10 +829,18 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
     // ----------------------------------------------------------
 
     if (_selectedAddress == null || _selectedAddress!.trim().isEmpty) {
-      _showMessage(
-        'Unable to determine the address. '
-        'Please pin the location again.',
+      final bool pinAgain = await _showFormPrompt(
+        icon: Icons.wrong_location_outlined,
+        title: 'Address not found',
+        message:
+            'We could not determine the address of the pinned location. '
+            'Please pin the location again.',
+        actionLabel: 'Pin Again',
       );
+
+      if (pinAgain && mounted) {
+        await _openMapPicker();
+      }
 
       return;
     }
@@ -627,7 +852,11 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
     final String description = _descriptionController.text.trim();
 
     if (description.length > 300) {
-      _showMessage('Description must not exceed 300 characters.');
+      await _showFormPrompt(
+        icon: Icons.notes_rounded,
+        title: 'Description too long',
+        message: 'Please keep the description within 300 characters.',
+      );
 
       return;
     }
@@ -861,6 +1090,169 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
   }
 
   // ============================================================
+  // FORM PROMPT (visible on top of this dialog, unlike snackbars)
+  // Returns true when the user taps the action button.
+  // ============================================================
+
+  Future<bool> _showFormPrompt({
+    required IconData icon,
+    required String title,
+    required String message,
+    String? actionLabel,
+  }) async {
+    if (!mounted) return false;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: Icon(icon, color: AppColors.primary, size: 32),
+        title: Text(title, textAlign: TextAlign.center),
+        content: Text(message, textAlign: TextAlign.center),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(
+              actionLabel == null ? 'OK' : 'Later',
+              style: TextStyle(
+                color: actionLabel == null
+                    ? AppColors.primary
+                    : AppColors.textSecondary,
+              ),
+            ),
+          ),
+          if (actionLabel != null)
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(actionLabel),
+            ),
+        ],
+      ),
+    );
+
+    return result ?? false;
+  }
+
+  // ============================================================
+  // LOCATION PREVIEW (small map shown after a location is pinned)
+  // ============================================================
+
+  Widget _buildLocationPreview() {
+    final LatLng point = _selectedLocation!;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: SizedBox(
+        height: 150,
+        width: double.infinity,
+        child: Stack(
+          children: [
+            // Key on the coordinates so the map re-centres when the pin moves.
+            FlutterMap(
+              key: ValueKey('${point.latitude},${point.longitude}'),
+              options: MapOptions(
+                initialCenter: point,
+                initialZoom: 16,
+                // Preview only: no panning or zooming inside the form.
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.none,
+                ),
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.example.citisense',
+                ),
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: point,
+                      width: 44,
+                      height: 52,
+                      alignment: Alignment.topCenter,
+                      child: const Icon(
+                        Icons.location_on,
+                        size: 44,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            // Tap anywhere on the preview to adjust the pin.
+            Positioned.fill(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _isSubmitting || _isLocating ? null : _openMapPicker,
+                ),
+              ),
+            ),
+
+            Positioned(
+              right: 8,
+              bottom: 8,
+              child: IgnorePointer(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: AppShadows.soft,
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.edit_location_alt_outlined,
+                        size: 14,
+                        color: AppColors.primary,
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        'Tap to adjust',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // CATEGORY ICON
+  // ============================================================
+
+  IconData _categoryIcon(String? category) {
+    switch (category) {
+      case 'Waste Accumulation':
+        return Icons.delete_outline;
+      case 'Blocked Drainage':
+        return Icons.water_drop_outlined;
+      case 'Road Potholes':
+        return Icons.warning_amber_rounded;
+      case 'Others':
+        return Icons.more_horiz_rounded;
+      default:
+        return Icons.category_outlined;
+    }
+  }
+
+  // ============================================================
   // SECTION TITLE
   // ============================================================
 
@@ -907,10 +1299,10 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
       hintText: hint,
       filled: true,
       fillColor: Colors.white,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFFB9D1F0)),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        borderSide: const BorderSide(color: AppColors.border),
       ),
     );
   }
@@ -922,10 +1314,10 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
   @override
   Widget build(BuildContext context) {
     final screen = MediaQuery.of(context).size;
-    const fieldBlue = Color(0xFF2875E9);
-    const navy = Color(0xFF102852);
-    const muted = Color(0xFF60738D);
-    const borderBlue = Color(0xFFBDD5E8);
+    const fieldBlue = AppColors.primary;
+    const navy = AppColors.ink;
+    const muted = AppColors.textSecondary;
+    const borderBlue = AppColors.border;
 
     Widget sectionHeading(String number, String name, {Widget? trailing}) {
       return Row(
@@ -974,11 +1366,11 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
         ),
         child: Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF216BDD),
-            borderRadius: BorderRadius.circular(30),
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.13),
+                color: AppColors.shadow.withValues(alpha: 0.13),
                 blurRadius: 22,
                 offset: const Offset(0, 10),
               ),
@@ -993,9 +1385,9 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                 child: Container(
                   height: 174,
                   decoration: const BoxDecoration(
-                    color: Color(0xFFF9FBFF),
+                    color: AppColors.background,
                     borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(29),
+                      top: Radius.circular(24),
                     ),
                   ),
                   child: Stack(
@@ -1027,24 +1419,14 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                           ],
                         ),
                       ),
-                      // Replace this container with Image.asset later.
-                      Positioned(
-                        right: 15,
-                        bottom: 10,
-                        child: Container(
-                          width: 105,
-                          height: 112,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE6F2FF),
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: borderBlue),
-                          ),
-                          child: const Text(
-                            'Mascot\nplaceholder',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 12, color: muted),
-                          ),
+                      // Mascot taking a photo with a phone (loops).
+                      const Positioned(
+                        right: 12,
+                        bottom: 6,
+                        child: SizedBox(
+                          width: 110,
+                          height: 118,
+                          child: CitiMascot(pose: MascotPose.camera),
                         ),
                       ),
                     ],
@@ -1057,8 +1439,8 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                   decoration: const BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(31),
-                      bottom: Radius.circular(30),
+                      top: Radius.circular(24),
+                      bottom: Radius.circular(28),
                     ),
                   ),
                   child: SingleChildScrollView(
@@ -1072,15 +1454,15 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                           onTap: _isSubmitting || _isAnalyzing
                               ? null
                               : _showImageSourceOptions,
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(AppRadius.md),
                           child: Container(
                             width: double.infinity,
                             height: 165,
                             clipBehavior: Clip.antiAlias,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF1F6FC),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: borderBlue),
+                              color: AppColors.primarySoft,
+                              borderRadius: BorderRadius.circular(AppRadius.md),
+                              border: Border.all(color: AppColors.primaryBorder),
                             ),
                             child: _selectedImageBytes != null
                                 ? Image.memory(
@@ -1123,16 +1505,43 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                                 ),
                                 SizedBox(width: 8),
                                 Expanded(
-                                  child: Text('AI is analyzing the photo...'),
+                                  child: Text(
+                                    'AI is analyzing the photo...',
+                                    style: TextStyle(fontSize: 12, color: muted),
+                                  ),
                                 ),
                               ],
                             )
                           else
-                            Text(
-                              _aiMessage!,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: muted,
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: AppColors.accentSoft,
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.sm,
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(
+                                    Icons.auto_awesome,
+                                    size: 16,
+                                    color: AppColors.accent,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _aiMessage!,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        height: 1.4,
+                                        color: navy,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                         ],
@@ -1140,14 +1549,16 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                         sectionHeading(
                           '2',
                           'Issue Category',
-                          trailing: Container(
+                          trailing: !_aiEnabled
+                              ? null
+                              : Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 10,
                               vertical: 5,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFEAF4FF),
-                              borderRadius: BorderRadius.circular(18),
+                              color: AppColors.accentSoft,
+                              borderRadius: BorderRadius.circular(20),
                             ),
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
@@ -1155,14 +1566,15 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                                 Icon(
                                   Icons.auto_awesome,
                                   size: 14,
-                                  color: fieldBlue,
+                                  color: AppColors.accent,
                                 ),
                                 SizedBox(width: 5),
                                 Text(
                                   'AI Suggestion',
                                   style: TextStyle(
-                                    color: fieldBlue,
+                                    color: AppColors.accent,
                                     fontSize: 11,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ],
@@ -1175,9 +1587,9 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                           isExpanded: true,
                           decoration: InputDecoration(
                             filled: true,
-                            fillColor: const Color(0xFFF3F7FD),
-                            prefixIcon: const Icon(
-                              Icons.delete_outline,
+                            fillColor: AppColors.surfaceMuted,
+                            prefixIcon: Icon(
+                              _categoryIcon(_selectedCategory),
                               color: fieldBlue,
                             ),
                             contentPadding: const EdgeInsets.symmetric(
@@ -1185,12 +1597,16 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                               vertical: 16,
                             ),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(13),
+                              borderRadius: BorderRadius.circular(AppRadius.sm),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(13),
+                              borderRadius: BorderRadius.circular(AppRadius.sm),
                               borderSide: const BorderSide(color: borderBlue),
                             ),
+                            errorText:
+                                _showMissingFields && _selectedCategory == null
+                                ? 'Please select a category.'
+                                : null,
                           ),
                           hint: const Text(
                             'Select category',
@@ -1219,37 +1635,65 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                                 },
                         ),
                         const SizedBox(height: 8),
-                        const Text(
-                          'You can change the category if needed.',
-                          style: TextStyle(color: muted, fontSize: 12),
+                        Text(
+                          _aiEnabled
+                              ? 'You can change the category if needed.'
+                              : 'AI Insights is off. Please choose a category.',
+                          style: const TextStyle(color: muted, fontSize: 12),
                         ),
                         const SizedBox(height: 26),
                         sectionHeading('3', 'Location'),
                         const SizedBox(height: 12),
+                        if (_selectedLocation != null) ...[
+                          _buildLocationPreview(),
+                          const SizedBox(height: 10),
+                        ],
                         OutlinedButton(
-                          onPressed: _isSubmitting ? null : _openMapPicker,
+                          onPressed: _isSubmitting || _isLocating
+                              ? null
+                              : _openMapPicker,
                           style: OutlinedButton.styleFrom(
-                            backgroundColor: const Color(0xFFF7FAFE),
+                            backgroundColor: AppColors.surfaceMuted,
                             minimumSize: const Size(double.infinity, 57),
                             padding: const EdgeInsets.symmetric(horizontal: 15),
-                            side: const BorderSide(color: borderBlue),
+                            side: BorderSide(
+                              color:
+                                  _showMissingFields &&
+                                      _selectedLocation == null
+                                  ? AppColors.danger
+                                  : borderBlue,
+                            ),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(13),
+                              borderRadius: BorderRadius.circular(AppRadius.sm),
                             ),
                           ),
                           child: Row(
                             children: [
-                              const Icon(
-                                Icons.location_on_outlined,
-                                color: fieldBlue,
-                                size: 27,
-                              ),
+                              _isLocating
+                                  ? const SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.4,
+                                      ),
+                                    )
+                                  : Icon(
+                                      _selectedLocation == null
+                                          ? Icons.location_on_outlined
+                                          : Icons.where_to_vote_rounded,
+                                      color: _selectedLocation == null
+                                          ? fieldBlue
+                                          : AppColors.success,
+                                      size: 27,
+                                    ),
                               const SizedBox(width: 13),
                               Expanded(
                                 child: Text(
-                                  _selectedLocation == null
+                                  _isLocating
+                                      ? 'Getting your location...'
+                                      : _selectedLocation == null
                                       ? 'Set Location on Map'
-                                      : 'Location pinned',
+                                      : 'Location pinned (tap to change)',
                                   style: const TextStyle(
                                     color: navy,
                                     fontSize: 14,
@@ -1262,7 +1706,33 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                           ),
                         ),
                         if (_selectedLocation != null) ...[
-                          const SizedBox(height: 7),
+                          if (_selectedAddress != null &&
+                              _selectedAddress!.trim().isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(
+                                  Icons.place_outlined,
+                                  size: 16,
+                                  color: AppColors.success,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    _selectedAddress!,
+                                    style: const TextStyle(
+                                      color: navy,
+                                      fontSize: 12,
+                                      height: 1.4,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(height: 6),
                           Text(
                             'Latitude: ${_selectedLocation!.latitude.toStringAsFixed(6)}  '
                             'Longitude: ${_selectedLocation!.longitude.toStringAsFixed(6)}',
@@ -1270,9 +1740,27 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                           ),
                         ],
                         const SizedBox(height: 8),
-                        const Text(
-                          'Tap to pin the exact location of the issue.',
-                          style: TextStyle(color: muted, fontSize: 12),
+                        Text(
+                          _showMissingFields && _selectedLocation == null
+                              ? 'Please pin the location of the issue.'
+                              : _locationNote ??
+                                    'Tap to pin the exact location of the issue.',
+                          style: TextStyle(
+                            color:
+                                _showMissingFields && _selectedLocation == null
+                                ? AppColors.danger
+                                : _selectedLocation == null &&
+                                      _locationNote != null
+                                ? AppColors.warning
+                                : muted,
+                            fontSize: 12,
+                            fontWeight:
+                                _locationNote != null ||
+                                    (_showMissingFields &&
+                                        _selectedLocation == null)
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                          ),
                         ),
                         const SizedBox(height: 26),
                         sectionHeading('4', 'Description'),
@@ -1288,14 +1776,14 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                             hintText: 'Please describe the issue...',
                             hintStyle: const TextStyle(color: muted),
                             filled: true,
-                            fillColor: const Color(0xFFF6F9FE),
+                            fillColor: AppColors.surfaceMuted,
                             counterText: '',
                             contentPadding: const EdgeInsets.all(16),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(13),
+                              borderRadius: BorderRadius.circular(AppRadius.sm),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(13),
+                              borderRadius: BorderRadius.circular(AppRadius.sm),
                               borderSide: const BorderSide(color: borderBlue),
                             ),
                           ),
@@ -1319,7 +1807,7 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                                   minimumSize: const Size(0, 54),
                                   side: const BorderSide(color: fieldBlue),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(15),
+                                    borderRadius: BorderRadius.circular(AppRadius.sm),
                                   ),
                                 ),
                                 child: const Text(
@@ -1342,7 +1830,7 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                                   foregroundColor: Colors.white,
                                   minimumSize: const Size(0, 54),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(15),
+                                    borderRadius: BorderRadius.circular(AppRadius.sm),
                                   ),
                                 ),
                                 child: _isSubmitting
@@ -1385,11 +1873,13 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
 class MapLocationPicker extends StatefulWidget {
   final LatLng? initialLocation;
   final bool requireMapTap;
+  final bool hasLiveLocation;
 
   const MapLocationPicker({
     super.key,
     this.initialLocation,
     this.requireMapTap = false,
+    this.hasLiveLocation = true,
   });
 
   @override
@@ -1437,6 +1927,7 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
   Widget build(BuildContext context) {
     return Dialog(
       insetPadding: const EdgeInsets.all(16),
+      clipBehavior: Clip.antiAlias,
 
       child: SizedBox(
         height: MediaQuery.of(context).size.height * 0.75,
@@ -1457,7 +1948,8 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
 
                       style: TextStyle(
                         fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.ink,
                       ),
                     ),
                   ),
@@ -1474,13 +1966,22 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
             // ==================================================
             // INSTRUCTIONS
             // ==================================================
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
 
               child: Text(
-                'The map starts at your current location. '
-                'Tap the map to pin the exact place where '
-                'the issue was found.',
+                widget.hasLiveLocation
+                    ? 'The map starts at your current location. '
+                          'Tap the map to pin the exact place where '
+                          'the issue was found.'
+                    : 'Your current location is unavailable, so the map '
+                          'starts at Cebu City. Tap the map to pin the '
+                          'exact place where the issue was found.',
+                style: const TextStyle(
+                  fontSize: 13,
+                  height: 1.45,
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
 
@@ -1522,9 +2023,26 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
                       // SELECTED LOCATION MARKER
                       // ----------------------------------------
                       MarkerLayer(
-                        markers: _selectedLocation == null
-                            ? []
-                            : [
+                        markers: [
+                          // Blue dot: the user's live location.
+                          if (widget.hasLiveLocation)
+                            Marker(
+                              point: _currentLocation,
+                              width: 22,
+                              height: 22,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 3,
+                                  ),
+                                  boxShadow: AppShadows.soft,
+                                ),
+                              ),
+                            ),
+                          if (_selectedLocation != null)
                                 Marker(
                                   point: _selectedLocation!,
                                   width: 50,
@@ -1532,10 +2050,10 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
                                   child: const Icon(
                                     Icons.location_on,
                                     size: 48,
-                                    color: Color(0xFF2563D9),
+                                    color: AppColors.primary,
                                   ),
                                 ),
-                              ],
+                        ],
                       ),
 
                       // ----------------------------------------
@@ -1561,7 +2079,7 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
 
                       backgroundColor: Colors.white,
 
-                      foregroundColor: const Color(0xFF2563D9),
+                      foregroundColor: AppColors.primary,
 
                       onPressed: _recenterMap,
 
@@ -1588,12 +2106,17 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
                               'Longitude: '
                               '${_selectedLocation!.longitude.toStringAsFixed(6)}',
                     textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
 
                   const SizedBox(height: 12),
 
                   SizedBox(
                     width: double.infinity,
+                    height: 52,
                     child: ElevatedButton(
                       onPressed: _selectedLocation == null
                           ? null

@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'package:citisense/api_config.dart';
 
 import 'package:flutter/material.dart';
+import 'package:citisense/app_theme.dart';
+import 'package:citisense/mascot.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:citisense/report_issue_overlay.dart';
@@ -8,10 +11,6 @@ import 'package:citisense/settings_page.dart';
 import 'package:citisense/my_reports.dart';
 import 'package:citisense/notification_page.dart';
 
-const Color primaryBlue = Color(0xFF2875ED);
-const Color darkBlue = Color(0xFF09204F);
-const Color textGrey = Color(0xFF596887);
-const Color backgroundColor = Color(0xFFFBFCFF);
 
 class HomePage extends StatefulWidget {
   // ============================================================
@@ -48,6 +47,9 @@ class _HomePageState extends State<HomePage> {
 
   int _selectedIndex = 0;
 
+  // Increases every time Home is tapped so the mascot waves again.
+  int _waveToken = 0;
+
   // Latest user information
   String _userID = '';
   String _firstName = '';
@@ -75,12 +77,12 @@ class _HomePageState extends State<HomePage> {
 
   static const String _getProfileUrl =
       // 'http://192.168.1.6/citisense/api/get_profile.php';
-      'http://10.119.145.252/citisense/api/get_profile.php';
+      '$serverBaseUrl/api/get_profile.php';
   //'http://10.127.214.252/citisense/api/get_profile.php';
   //'http://192.168.83.252/citisense/api/get_profile.php';
   static const String _getAnnouncementsUrl =
       // 'http://192.168.1.6/citisense/api/get_announcements.php';
-      'http://10.119.145.252/citisense/api/get_announcements.php';
+      '$serverBaseUrl/api/get_announcements.php';
   //'http://10.127.214.252/citisense/api/get_announcements.php';
   //'http://192.168.83.252/citisense/api/get_announcements.php';
 
@@ -256,7 +258,7 @@ class _HomePageState extends State<HomePage> {
 
     try {
       final uri = Uri.parse(
-        'http://10.186.51.252/citisense/api/get_barangays.php',
+        '$serverBaseUrl/api/get_barangays.php',
       );
       debugPrint('[HOME] Barangays request URL: $uri');
       final response = await http
@@ -399,6 +401,10 @@ class _HomePageState extends State<HomePage> {
   // ============================================================
 
   void _onItemTapped(int index) {
+    if (index == 0) {
+      _waveToken++;
+    }
+
     // ----------------------------------------------------------
     // IF USER RETURNS TO HOME, GET THE LATEST PROFILE DATA
     // ----------------------------------------------------------
@@ -469,46 +475,51 @@ class _HomePageState extends State<HomePage> {
       // ========================================================
       // BOTTOM NAVIGATION
       // ========================================================
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.white,
-        selectedItemColor: const Color(0xFF1761E8),
-        unselectedItemColor: textGrey,
-        selectedFontSize: 12,
-        unselectedFontSize: 12,
-        selectedLabelStyle: const TextStyle(
-          fontWeight: FontWeight.w700,
-          fontFamily: 'Biennale',
+      bottomNavigationBar: DecoratedBox(
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: AppColors.divider)),
         ),
-        unselectedLabelStyle: const TextStyle(
-          fontWeight: FontWeight.w600,
-          fontFamily: 'Biennale',
+        child: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: _onItemTapped,
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.white,
+          selectedItemColor: AppColors.primary,
+          unselectedItemColor: textGrey,
+          selectedFontSize: 12,
+          unselectedFontSize: 12,
+          selectedLabelStyle: const TextStyle(
+            fontWeight: FontWeight.w700,
+            fontFamily: appFontFamily,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontFamily: appFontFamily,
+          ),
+          elevation: 0,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home),
+              label: 'Home',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.assignment_outlined),
+              activeIcon: Icon(Icons.assignment),
+              label: 'My Reports',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.notifications_none),
+              activeIcon: Icon(Icons.notifications),
+              label: 'Notifications',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings_outlined),
+              activeIcon: Icon(Icons.settings),
+              label: 'Settings',
+            ),
+          ],
         ),
-        elevation: 8,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.assignment_outlined),
-            activeIcon: Icon(Icons.assignment),
-            label: 'My Reports',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.notifications_none),
-            activeIcon: Icon(Icons.notifications),
-            label: 'Notifications',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings_outlined),
-            activeIcon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
-        ],
       ),
     );
   }
@@ -552,7 +563,7 @@ class _HomePageState extends State<HomePage> {
                             fontSize: 22,
                             fontWeight: FontWeight.w800,
                             color: darkBlue,
-                            fontFamily: 'Biennale',
+                            fontFamily: appFontFamily,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -561,7 +572,7 @@ class _HomePageState extends State<HomePage> {
                           style: TextStyle(
                             fontSize: 16,
                             color: textGrey,
-                            fontFamily: 'Biennale',
+                            fontFamily: appFontFamily,
                           ),
                         ),
                       ],
@@ -589,7 +600,7 @@ class _HomePageState extends State<HomePage> {
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                               color: textGrey,
-                              fontFamily: 'Biennale',
+                              fontFamily: appFontFamily,
                             ),
                           ),
                           const SizedBox(height: 1),
@@ -604,7 +615,7 @@ class _HomePageState extends State<HomePage> {
                                 height: 1.12,
                                 fontWeight: FontWeight.w900,
                                 color: darkBlue,
-                                fontFamily: 'Biennale',
+                                fontFamily: appFontFamily,
                               ),
                             ),
                           ),
@@ -617,7 +628,7 @@ class _HomePageState extends State<HomePage> {
                                 fontSize: 14,
                                 height: 1.55,
                                 color: textGrey,
-                                fontFamily: 'Biennale',
+                                fontFamily: appFontFamily,
                               ),
                             ),
                           ),
@@ -630,7 +641,10 @@ class _HomePageState extends State<HomePage> {
                       child: SizedBox(
                         width: constraints.maxWidth * .40,
                         height: 188,
-                        child: _buildMascotPlaceholder(),
+                        child: CitiMascot(
+                          pose: MascotPose.wave,
+                          playToken: _waveToken,
+                        ),
                       ),
                     ),
                   ],
@@ -641,21 +655,19 @@ class _HomePageState extends State<HomePage> {
                 color: Colors.transparent,
                 child: InkWell(
                   onTap: _openReportIssue,
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
                   child: Ink(
                     width: double.infinity,
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFF2F7DF2), Color(0xFF246DE7)],
+                        colors: [AppColors.primary, AppColors.primaryDark],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(
-                            0xFF154DAD,
-                          ).withValues(alpha: 0.17),
+                          color: AppColors.primary.withValues(alpha: 0.28),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -689,7 +701,7 @@ class _HomePageState extends State<HomePage> {
                           const Text(
                             'Report an Issue',
                             style: TextStyle(
-                              fontFamily: 'Biennale',
+                              fontFamily: appFontFamily,
                               fontSize: 21,
                               fontWeight: FontWeight.w800,
                               color: Colors.white,
@@ -700,7 +712,7 @@ class _HomePageState extends State<HomePage> {
                             'Tap to report a problem\nin your community',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              fontFamily: 'Biennale',
+                              fontFamily: appFontFamily,
                               fontSize: 15,
                               height: 1.5,
                               color: Colors.white,
@@ -715,31 +727,11 @@ class _HomePageState extends State<HomePage> {
               const SizedBox(height: 20),
               Row(
                 children: [
-                  SizedBox(
-                    width: 86,
-                    height: 55,
-                    child: Stack(
-                      children: [
-                        Positioned(
-                          left: 0,
-                          bottom: 0,
-                          child: SizedBox(
-                            width: 58,
-                            height: 54,
-                            child: _buildMascotPlaceholder(),
-                          ),
-                        ),
-                        const Positioned(
-                          right: 0,
-                          top: 16,
-                          child: Icon(
-                            Icons.campaign,
-                            color: Color(0xFFF2A318),
-                            size: 36,
-                          ),
-                        ),
-                      ],
-                    ),
+                  // Mascot holding a megaphone (static).
+                  const SizedBox(
+                    width: 64,
+                    height: 62,
+                    child: CitiMascot(pose: MascotPose.megaphone),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -752,7 +744,7 @@ class _HomePageState extends State<HomePage> {
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
                             color: darkBlue,
-                            fontFamily: 'Biennale',
+                            fontFamily: appFontFamily,
                           ),
                         ),
                         const SizedBox(height: 3),
@@ -763,7 +755,7 @@ class _HomePageState extends State<HomePage> {
                           style: const TextStyle(
                             fontSize: 13,
                             color: textGrey,
-                            fontFamily: 'Biennale',
+                            fontFamily: appFontFamily,
                           ),
                         ),
                       ],
@@ -775,32 +767,6 @@ class _HomePageState extends State<HomePage> {
               _buildAnnouncements(),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  // ============================================================
-  // MASCOT PLACEHOLDER (replace with Image.asset later)
-  // ============================================================
-
-  Widget _buildMascotPlaceholder() {
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      decoration: BoxDecoration(
-        color: const Color(0xFFEAF2FF),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFB8D2FA), width: 1.5),
-      ),
-      alignment: Alignment.center,
-      child: const Text(
-        'Mascot',
-        style: TextStyle(
-          color: Color(0xFF1761E8),
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          fontFamily: 'Biennale',
         ),
       ),
     );
@@ -832,7 +798,8 @@ class _HomePageState extends State<HomePage> {
         padding: const EdgeInsets.all(25),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.divider),
         ),
         child: const Center(
           child: Padding(
@@ -891,17 +858,11 @@ class _HomePageState extends State<HomePage> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 17),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF17366B).withValues(alpha: .07),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        boxShadow: AppShadows.card,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -918,11 +879,11 @@ class _HomePageState extends State<HomePage> {
                 Text(
                   title.isNotEmpty ? title.toUpperCase() : 'ANNOUNCEMENT',
                   style: const TextStyle(
-                    fontFamily: 'Biennale',
+                    fontFamily: appFontFamily,
                     fontSize: 15,
                     height: 1.22,
                     fontWeight: FontWeight.w800,
-                    color: Color(0xFF1870E9),
+                    color: AppColors.primary,
                   ),
                 ),
                 if (date != null) ...[
@@ -942,7 +903,7 @@ class _HomePageState extends State<HomePage> {
                         style: const TextStyle(
                           fontSize: 12,
                           color: textGrey,
-                          fontFamily: 'Biennale',
+                          fontFamily: appFontFamily,
                         ),
                       ),
                       const Text('·', style: TextStyle(color: textGrey)),
@@ -956,7 +917,7 @@ class _HomePageState extends State<HomePage> {
                         style: const TextStyle(
                           fontSize: 12,
                           color: textGrey,
-                          fontFamily: 'Biennale',
+                          fontFamily: appFontFamily,
                         ),
                       ),
                     ],
@@ -971,7 +932,7 @@ class _HomePageState extends State<HomePage> {
                     fontSize: 13.5,
                     height: 1.5,
                     color: darkBlue,
-                    fontFamily: 'Biennale',
+                    fontFamily: appFontFamily,
                   ),
                 ),
               ],
@@ -1072,12 +1033,12 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildAnnouncementImage(String imageUrl) {
     return Container(
-      width: 95,
-      height: 95,
+      width: 76,
+      height: 76,
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F5FF),
+        color: AppColors.primarySoft,
         shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFFE2EAF5), width: 1),
+        border: Border.all(color: AppColors.primaryBorder),
       ),
       clipBehavior: Clip.antiAlias,
       child: imageUrl.isNotEmpty
@@ -1087,12 +1048,12 @@ class _HomePageState extends State<HomePage> {
               errorBuilder: (context, error, stackTrace) {
                 return const Icon(
                   Icons.account_balance,
-                  size: 45,
+                  size: 36,
                   color: primaryBlue,
                 );
               },
             )
-          : const Icon(Icons.account_balance, size: 45, color: primaryBlue),
+          : const Icon(Icons.account_balance, size: 36, color: primaryBlue),
     );
   }
 
@@ -1106,11 +1067,12 @@ class _HomePageState extends State<HomePage> {
       padding: const EdgeInsets.all(25),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.divider),
       ),
       child: Column(
         children: [
-          Icon(icon, size: 35, color: Colors.grey),
+          Icon(icon, size: 36, color: AppColors.textMuted),
 
           const SizedBox(height: 10),
 
@@ -1119,8 +1081,8 @@ class _HomePageState extends State<HomePage> {
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 14,
-              color: Colors.grey,
-              fontFamily: 'Biennale',
+              color: AppColors.textSecondary,
+              fontFamily: appFontFamily,
             ),
           ),
         ],
@@ -1153,7 +1115,7 @@ class _HomePageState extends State<HomePage> {
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
                 color: darkBlue,
-                fontFamily: 'Biennale',
+                fontFamily: appFontFamily,
               ),
             ),
 
@@ -1164,8 +1126,8 @@ class _HomePageState extends State<HomePage> {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 15,
-                color: Colors.grey,
-                fontFamily: 'Biennale',
+                color: AppColors.textSecondary,
+                fontFamily: appFontFamily,
               ),
             ),
           ],
@@ -1185,14 +1147,14 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 55, color: Colors.redAccent),
+            const Icon(Icons.error_outline, size: 55, color: AppColors.danger),
 
             const SizedBox(height: 15),
 
             Text(
               _errorMessage ?? 'Something went wrong.',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontFamily: 'Biennale'),
+              style: const TextStyle(fontSize: 16, fontFamily: appFontFamily),
             ),
 
             const SizedBox(height: 20),

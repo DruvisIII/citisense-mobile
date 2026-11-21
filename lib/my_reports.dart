@@ -1,14 +1,13 @@
 import 'dart:async';
+import 'package:citisense/api_config.dart';
 import 'dart:convert';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:citisense/app_theme.dart';
+import 'package:citisense/mascot.dart';
 import 'package:http/http.dart' as http;
 
-const Color primaryBlue = Color(0xFF0757F2);
-const Color darkBlue = Color(0xFF101D59);
-const Color textGrey = Color(0xFF596887);
-const Color backgroundColor = Color(0xFFF7F9FD);
 
 // Parses MySQL/PHP date values consistently. Values without an explicit
 // timezone are treated as local device time (the usual SQL DATETIME format).
@@ -19,6 +18,22 @@ DateTime? _parseReportDateTime(dynamic value) {
   if (rawValue.isEmpty) return null;
 
   return DateTime.tryParse(rawValue.replaceFirst(' ', 'T'));
+}
+
+// The admin-set resolution deadline, or null when the admin has not set
+// one yet. Empty values, zero dates (0000-00-00) and deadlines that are not
+// after the submission date are treated as "not set".
+DateTime? _getAdminTimeline(Map<String, dynamic> report) {
+  final timeline = _parseReportDateTime(report['timeline']);
+  final dateReported = _parseReportDateTime(report['dateReported']);
+
+  if (timeline == null || timeline.year < 2000) {
+    return null;
+  }
+  if (dateReported != null && !timeline.isAfter(dateReported)) {
+    return null;
+  }
+  return timeline;
 }
 
 // A report is overdue only when its deadline is valid, comes after the
@@ -71,7 +86,7 @@ class MyReportsPage extends StatefulWidget {
 class _MyReportsPageState extends State<MyReportsPage> {
   static const String _getReportsUrl =
       // 'http://192.168.1.6/citisense/api/get_my_reports.php';
-      'http://10.119.145.252/citisense/api/get_my_reports.php';
+      '$serverBaseUrl/api/get_my_reports.php';
   // 'http://10.127.214.252/citisense/api/get_my_reports.php';
   //'http://192.168.83.252/citisense/api/get_my_reports.php';
   int _selectedFilter = 1;
@@ -329,10 +344,10 @@ class _MyReportsPageState extends State<MyReportsPage> {
     }
 
     if (imagePath.startsWith('/')) {
-      return 'http://10.119.145.252/citisense$imagePath';
+      return '$serverBaseUrl$imagePath';
     }
 
-    return 'http://10.119.145.252/citisense/$imagePath';
+    return '$serverBaseUrl/$imagePath';
   }
 
   String _formatDate(String? value) {
@@ -417,16 +432,16 @@ class _MyReportsPageState extends State<MyReportsPage> {
 
     switch (statusID) {
       case 'STAT001':
-        return const Color(0xFFE59B24);
+        return AppColors.warning;
 
       case 'STAT002':
         return primaryBlue;
 
       case 'STAT003':
-        return const Color(0xFF2CA45A);
+        return AppColors.success;
 
       case 'STAT004':
-        return const Color(0xFFD64545);
+        return AppColors.danger;
 
       default:
         return textGrey;
@@ -531,8 +546,8 @@ class _MyReportsPageState extends State<MyReportsPage> {
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w800,
-                          color: Color(0xFF09204F),
-                          fontFamily: 'Biennale',
+                          color: AppColors.ink,
+                          fontFamily: appFontFamily,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -541,7 +556,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                         style: TextStyle(
                           fontSize: 16,
                           color: textGrey,
-                          fontFamily: 'Biennale',
+                          fontFamily: appFontFamily,
                         ),
                       ),
                     ],
@@ -569,7 +584,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                             color: textGrey,
-                            fontFamily: 'Biennale',
+                            fontFamily: appFontFamily,
                           ),
                         ),
                         const SizedBox(height: 1),
@@ -583,8 +598,8 @@ class _MyReportsPageState extends State<MyReportsPage> {
                               fontSize: 41,
                               height: 1.12,
                               fontWeight: FontWeight.w900,
-                              color: Color(0xFF09204F),
-                              fontFamily: 'Biennale',
+                              color: AppColors.ink,
+                              fontFamily: appFontFamily,
                             ),
                           ),
                         ),
@@ -597,7 +612,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                               fontSize: 14,
                               height: 1.55,
                               color: textGrey,
-                              fontFamily: 'Biennale',
+                              fontFamily: appFontFamily,
                             ),
                           ),
                         ),
@@ -623,21 +638,8 @@ class _MyReportsPageState extends State<MyReportsPage> {
   }
 
   Widget _buildMascot() {
-    // Replace this container with Image.asset('assets/your_mascot.png') later.
-    return Container(
-      width: 145,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: const Color(0xFFE8F1FF),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFC4D8FF)),
-      ),
-      child: const Text(
-        'Mascot\nplaceholder',
-        textAlign: TextAlign.center,
-        style: TextStyle(fontFamily: 'Biennale', color: textGrey, fontSize: 13),
-      ),
-    );
+    // Mascot writing a report on a clipboard (loops).
+    return const CitiMascot(pose: MascotPose.report);
   }
 
   Widget _buildReportsHeading() {
@@ -649,9 +651,9 @@ class _MyReportsPageState extends State<MyReportsPage> {
             width: 57,
             height: 57,
             decoration: BoxDecoration(
-              color: const Color(0xFFEAF1FF),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFD0DEFF)),
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.primaryBorder),
             ),
             child: const Icon(
               Icons.assignment_outlined,
@@ -667,9 +669,9 @@ class _MyReportsPageState extends State<MyReportsPage> {
                 Text(
                   'My Reports',
                   style: TextStyle(
-                    fontFamily: 'Biennale',
-                    color: primaryBlue,
-                    fontSize: 27,
+                    fontFamily: appFontFamily,
+                    color: darkBlue,
+                    fontSize: 26,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -677,9 +679,9 @@ class _MyReportsPageState extends State<MyReportsPage> {
                 Text(
                   'Track the status of your submitted reports.',
                   style: TextStyle(
-                    fontFamily: 'Biennale',
+                    fontFamily: appFontFamily,
                     color: textGrey,
-                    fontSize: 12,
+                    fontSize: 13,
                   ),
                 ),
               ],
@@ -696,14 +698,8 @@ class _MyReportsPageState extends State<MyReportsPage> {
       padding: const EdgeInsets.all(7),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .045),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        boxShadow: AppShadows.soft,
       ),
       child: Row(
         children: [
@@ -719,7 +715,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
     final selected = _selectedFilter == index;
     return Expanded(
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(14),
         onTap: () => setState(() => _selectedFilter = index),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
@@ -727,17 +723,17 @@ class _MyReportsPageState extends State<MyReportsPage> {
           padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 2),
           decoration: BoxDecoration(
             color: selected ? primaryBlue : Colors.transparent,
-            borderRadius: BorderRadius.circular(17),
+            borderRadius: BorderRadius.circular(14),
           ),
           child: Text(
             label,
             maxLines: 1,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontFamily: 'Biennale',
-              fontSize: 12,
+              fontFamily: appFontFamily,
+              fontSize: 13,
               fontWeight: FontWeight.w700,
-              color: selected ? Colors.white : primaryBlue,
+              color: selected ? Colors.white : textGrey,
             ),
           ),
         ),
@@ -754,22 +750,17 @@ class _MyReportsPageState extends State<MyReportsPage> {
             child: Container(
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(17),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: .035),
-                    blurRadius: 9,
-                  ),
-                ],
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                boxShadow: AppShadows.soft,
               ),
               child: TextField(
                 onChanged: (value) => setState(() => _searchQuery = value),
-                style: const TextStyle(fontFamily: 'Biennale', color: darkBlue),
+                style: const TextStyle(fontFamily: appFontFamily, color: darkBlue),
                 decoration: InputDecoration(
                   hintText: 'Search report...',
                   hintStyle: const TextStyle(
-                    fontFamily: 'Biennale',
-                    color: textGrey,
+                    fontFamily: appFontFamily,
+                    color: AppColors.textMuted,
                     fontSize: 14,
                   ),
                   prefixIcon: const Icon(
@@ -778,8 +769,16 @@ class _MyReportsPageState extends State<MyReportsPage> {
                     size: 25,
                   ),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(17),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                     borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    borderSide: const BorderSide(color: primaryBlue, width: 1.6),
                   ),
                   contentPadding: const EdgeInsets.symmetric(vertical: 16),
                 ),
@@ -789,23 +788,18 @@ class _MyReportsPageState extends State<MyReportsPage> {
           const SizedBox(width: 10),
           InkWell(
             onTap: _showSortOptions,
-            borderRadius: BorderRadius.circular(17),
+            borderRadius: BorderRadius.circular(AppRadius.md),
             child: Container(
-              width: 55,
-              height: 55,
+              width: 54,
+              height: 54,
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(17),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: .04),
-                    blurRadius: 9,
-                  ),
-                ],
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                boxShadow: AppShadows.soft,
               ),
               child: const Icon(
-                Icons.filter_alt_outlined,
-                color: textGrey,
+                Icons.swap_vert_rounded,
+                color: primaryBlue,
                 size: 26,
               ),
             ),
@@ -821,32 +815,26 @@ class _MyReportsPageState extends State<MyReportsPage> {
     final category = _getCategoryName(report);
     final categoryIsPothole = category.toLowerCase().contains('pothole');
     final categoryColor = categoryIsPothole
-        ? const Color(0xFF7825B3)
+        ? AppColors.accent
         : primaryBlue;
     return InkWell(
       onTap: () => _openReportDetails(report),
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(AppRadius.lg),
       child: Container(
-        padding: const EdgeInsets.all(13),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: .05),
-              blurRadius: 11,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          boxShadow: AppShadows.card,
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.md),
               child: SizedBox(
-                width: 105,
-                height: 148,
+                width: 104,
+                height: 144,
                 child: imageUrl == null
                     ? _buildImagePlaceholder()
                     : Image.network(
@@ -879,9 +867,9 @@ class _MyReportsPageState extends State<MyReportsPage> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontFamily: 'Biennale',
+                              fontFamily: appFontFamily,
                               color: categoryColor,
-                              fontSize: 9,
+                              fontSize: 10,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -901,9 +889,9 @@ class _MyReportsPageState extends State<MyReportsPage> {
                           _getStatusText(report),
                           maxLines: 1,
                           style: TextStyle(
-                            fontFamily: 'Biennale',
+                            fontFamily: appFontFamily,
                             color: statusColor,
-                            fontSize: 9,
+                            fontSize: 10,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -916,7 +904,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontFamily: 'Biennale',
+                      fontFamily: appFontFamily,
                       color: darkBlue,
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
@@ -938,9 +926,9 @@ class _MyReportsPageState extends State<MyReportsPage> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontFamily: 'Biennale',
+                            fontFamily: appFontFamily,
                             color: textGrey,
-                            fontSize: 11,
+                            fontSize: 12,
                           ),
                         ),
                       ),
@@ -961,9 +949,9 @@ class _MyReportsPageState extends State<MyReportsPage> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontFamily: 'Biennale',
+                            fontFamily: appFontFamily,
                             color: textGrey,
-                            fontSize: 10,
+                            fontSize: 11,
                           ),
                         ),
                       ),
@@ -975,7 +963,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                       Text(
                         'View Details',
                         style: TextStyle(
-                          fontFamily: 'Biennale',
+                          fontFamily: appFontFamily,
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
                           color: primaryBlue,
@@ -996,7 +984,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
 
   Widget _buildImagePlaceholder() {
     return Container(
-      color: const Color(0xFFE8F0FF),
+      color: AppColors.primarySoft,
       child: const Center(
         child: Icon(Icons.image_outlined, size: 38, color: primaryBlue),
       ),
@@ -1023,7 +1011,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
               width: 90,
               height: 90,
               decoration: const BoxDecoration(
-                color: Color(0xFFE8F0FF),
+                color: AppColors.primarySoft,
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -1041,7 +1029,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: darkBlue,
-                fontFamily: 'Biennale',
+                fontFamily: appFontFamily,
               ),
             ),
 
@@ -1054,7 +1042,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                 fontSize: 13,
                 height: 1.5,
                 color: textGrey,
-                fontFamily: 'Biennale',
+                fontFamily: appFontFamily,
               ),
             ),
           ],
@@ -1079,7 +1067,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
                 color: darkBlue,
-                fontFamily: 'Biennale',
+                fontFamily: appFontFamily,
               ),
             ),
 
@@ -1093,7 +1081,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
               ),
               child: const Text(
                 'Try Again',
-                style: TextStyle(color: Colors.white, fontFamily: 'Biennale'),
+                style: TextStyle(color: Colors.white, fontFamily: appFontFamily),
               ),
             ),
           ],
@@ -1124,10 +1112,10 @@ class ReportDetailsPage extends StatelessWidget {
     }
 
     if (imagePath.startsWith('/')) {
-      return 'http://10.119.145.252/citisense$imagePath';
+      return '$serverBaseUrl$imagePath';
     }
 
-    return 'http://10.119.145.252/citisense/$imagePath';
+    return '$serverBaseUrl/$imagePath';
   }
 
   String _formatDate(String? value) {
@@ -1187,14 +1175,9 @@ class ReportDetailsPage extends StatelessWidget {
   }
 
   String _formatTimeline() {
-    final value = report['timeline']?.toString();
-    if (value == null || value.trim().isEmpty) {
-      return 'No timeline set';
-    }
-
-    final date = _parseReportDateTime(value);
+    final date = _getAdminTimeline(report);
     if (date == null) {
-      return value;
+      return '';
     }
 
     return '${_formatDate(date.toIso8601String())}  •  '
@@ -1227,16 +1210,16 @@ class ReportDetailsPage extends StatelessWidget {
   Color _getStatusColor() {
     switch (_getEffectiveStatusID()) {
       case 'STAT001':
-        return const Color(0xFFE59B24);
+        return AppColors.warning;
 
       case 'STAT002':
         return primaryBlue;
 
       case 'STAT003':
-        return const Color(0xFF2CA45A);
+        return AppColors.success;
 
       case 'STAT004':
-        return const Color(0xFFD64545);
+        return AppColors.danger;
 
       default:
         return textGrey;
@@ -1265,7 +1248,7 @@ class ReportDetailsPage extends StatelessWidget {
             color: darkBlue,
             fontSize: 20,
             fontWeight: FontWeight.w700,
-            fontFamily: 'Biennale',
+            fontFamily: appFontFamily,
           ),
         ),
         centerTitle: true,
@@ -1280,7 +1263,7 @@ class ReportDetailsPage extends StatelessWidget {
               // IMAGE
               // ------------------------------------------------
               ClipRRect(
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(AppRadius.lg),
                 child: SizedBox(
                   width: double.infinity,
                   height: 230,
@@ -1307,16 +1290,16 @@ class ReportDetailsPage extends StatelessWidget {
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(9),
+                  color: statusColor.withValues(alpha: 0.11),
+                  borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   _getStatusText(),
                   style: TextStyle(
                     color: statusColor,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'Biennale',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: appFontFamily,
                   ),
                 ),
               ),
@@ -1329,11 +1312,11 @@ class ReportDetailsPage extends StatelessWidget {
               Text(
                 report['categoryName']?.toString().toUpperCase() ?? 'OTHER',
                 style: const TextStyle(
-                  fontSize: 10,
-                  letterSpacing: 0.5,
+                  fontSize: 11,
+                  letterSpacing: 0.6,
                   fontWeight: FontWeight.w600,
                   color: textGrey,
-                  fontFamily: 'Biennale',
+                  fontFamily: appFontFamily,
                 ),
               ),
 
@@ -1349,7 +1332,7 @@ class ReportDetailsPage extends StatelessWidget {
                   height: 1.25,
                   fontWeight: FontWeight.w700,
                   color: darkBlue,
-                  fontFamily: 'Biennale',
+                  fontFamily: appFontFamily,
                 ),
               ),
 
@@ -1389,15 +1372,17 @@ class ReportDetailsPage extends StatelessWidget {
               const SizedBox(height: 15),
 
               // ------------------------------------------------
-              // RESOLUTION TIMELINE
+              // RESOLUTION TIMELINE (only after the admin sets it)
               // ------------------------------------------------
-              _buildDetailRow(
-                icon: Icons.event_available_outlined,
-                title: 'Resolution Timeline',
-                value: _formatTimeline(),
-              ),
-
-              const SizedBox(height: 25),
+              if (_getAdminTimeline(report) != null) ...[
+                _buildDetailRow(
+                  icon: Icons.event_available_outlined,
+                  title: 'Resolution Timeline',
+                  value: _formatTimeline(),
+                ),
+                const SizedBox(height: 25),
+              ] else
+                const SizedBox(height: 10),
 
               // ------------------------------------------------
               // DESCRIPTION
@@ -1408,7 +1393,7 @@ class ReportDetailsPage extends StatelessWidget {
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: darkBlue,
-                  fontFamily: 'Biennale',
+                  fontFamily: appFontFamily,
                 ),
               ),
 
@@ -1419,7 +1404,8 @@ class ReportDetailsPage extends StatelessWidget {
                 padding: const EdgeInsets.all(17),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  border: Border.all(color: AppColors.divider),
                 ),
                 child: Text(
                   (report['description']?.toString().trim().isEmpty ?? true)
@@ -1429,7 +1415,7 @@ class ReportDetailsPage extends StatelessWidget {
                     fontSize: 13,
                     height: 1.6,
                     color: textGrey,
-                    fontFamily: 'Biennale',
+                    fontFamily: appFontFamily,
                   ),
                 ),
               ),
@@ -1463,7 +1449,7 @@ class ReportDetailsPage extends StatelessWidget {
           width: 40,
           height: 40,
           decoration: const BoxDecoration(
-            color: Color(0xFFE8F0FF),
+            color: AppColors.primarySoft,
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: primaryBlue, size: 20),
@@ -1478,9 +1464,9 @@ class ReportDetailsPage extends StatelessWidget {
               Text(
                 title,
                 style: const TextStyle(
-                  fontSize: 11,
+                  fontSize: 12,
                   color: textGrey,
-                  fontFamily: 'Biennale',
+                  fontFamily: appFontFamily,
                 ),
               ),
 
@@ -1493,7 +1479,7 @@ class ReportDetailsPage extends StatelessWidget {
                   height: 1.4,
                   fontWeight: FontWeight.w600,
                   color: darkBlue,
-                  fontFamily: 'Biennale',
+                  fontFamily: appFontFamily,
                 ),
               ),
             ],
@@ -1505,7 +1491,7 @@ class ReportDetailsPage extends StatelessWidget {
 
   Widget _imagePlaceholder() {
     return Container(
-      color: const Color(0xFFE8F0FF),
+      color: AppColors.primarySoft,
       child: const Center(
         child: Icon(Icons.image_outlined, size: 55, color: primaryBlue),
       ),

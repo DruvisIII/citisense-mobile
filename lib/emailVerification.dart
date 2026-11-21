@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'package:citisense/api_config.dart';
 
 import 'package:flutter/material.dart';
+import 'package:citisense/app_theme.dart';
 import 'package:http/http.dart' as http;
 import 'package:citisense/barangaySelection.dart';
 
@@ -26,7 +28,7 @@ class EmailVerification extends StatefulWidget {
 
 class _EmailVerificationState extends State<EmailVerification> {
   static const String _verifyUrl =
-      'http://10.119.145.252/citisense/api/verify_registration_otp.php';
+      '$serverBaseUrl/api/verify_registration_otp.php';
 
   final TextEditingController _otpController = TextEditingController();
 
@@ -89,7 +91,7 @@ class _EmailVerificationState extends State<EmailVerification> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(decoded['message'] ?? 'Email verification failed.'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.danger,
           ),
         );
       }
@@ -99,7 +101,7 @@ class _EmailVerificationState extends State<EmailVerification> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Verification failed: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppColors.danger,
         ),
       );
     } finally {
@@ -112,110 +114,91 @@ class _EmailVerificationState extends State<EmailVerification> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
+        backgroundColor: AppColors.surface,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black),
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
           onPressed: _isVerifying ? null : () => Navigator.pop(context),
         ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 30),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 30),
-              const Text(
-                'Verify Your Email',
-                style: TextStyle(
-                  fontSize: 30,
-                  fontFamily: 'Biennale',
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
+              const SizedBox(height: 12),
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: const Icon(
+                  Icons.mark_email_read_outlined,
+                  color: AppColors.primary,
+                  size: 28,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 20),
+              const Text('Verify Your Email', style: AppText.pageTitle),
+              const SizedBox(height: 8),
               const Text(
                 'We sent a six-digit verification code to:',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontFamily: 'Biennale',
-                  color: Colors.grey,
-                ),
+                style: AppText.subtitle,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               Text(
                 widget.email,
                 style: const TextStyle(
                   fontSize: 15,
-                  fontFamily: 'Biennale',
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF5887E0),
-                ),
-              ),
-              const SizedBox(height: 35),
-              const Text(
-                'Verification Code',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontFamily: 'Biennale',
+                  fontFamily: appFontFamily,
                   fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
                 ),
               ),
+              const SizedBox(height: 32),
+              const Text('Verification Code', style: AppText.fieldLabel),
               const SizedBox(height: 8),
               TextField(
                 controller: _otpController,
                 keyboardType: TextInputType.number,
                 maxLength: 6,
-                decoration: InputDecoration(
-                  hintText: 'Enter your six-digit code',
+                textAlign: TextAlign.center,
+                onSubmitted: (_) => _verifyOTP(),
+                style: const TextStyle(
+                  fontFamily: appFontFamily,
+                  fontSize: 20,
+                  letterSpacing: 8,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.ink,
+                ),
+                decoration: const InputDecoration(
+                  hintText: '••••••',
                   counterText: '',
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.blueGrey.shade200),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(
-                      color: Color(0xFF5887E0),
-                      width: 2,
-                    ),
-                  ),
                 ),
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 28),
               SizedBox(
                 width: double.infinity,
-                height: 55,
+                height: 52,
                 child: ElevatedButton(
                   onPressed: _isVerifying ? null : _verifyOTP,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF5887E0),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    elevation: 0,
-                  ),
                   child: _isVerifying
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text(
-                          'Verify Email',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontFamily: 'Biennale',
-                            fontWeight: FontWeight.bold,
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
                             color: Colors.white,
                           ),
-                        ),
+                        )
+                      : const Text('Verify Email'),
                 ),
               ),
+              const SizedBox(height: 32),
             ],
           ),
         ),

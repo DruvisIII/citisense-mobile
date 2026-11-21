@@ -1,16 +1,16 @@
 import 'dart:convert';
+import 'package:citisense/api_config.dart';
 
 import 'package:flutter/material.dart';
+import 'package:citisense/app_theme.dart';
+import 'package:citisense/mascot.dart';
 import 'package:http/http.dart' as http;
 
 import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-const Color primaryBlue = Color(0xFF5887E0);
-const Color darkBlue = Color(0xFF172D68);
-const Color textGrey = Color(0xFF596887);
 
-const String apiBaseUrl = 'http://10.119.145.252/citisense/api/';
+const String apiBaseUrl = '$serverBaseUrl/api/';
 //'http://192.168.1.48/citisense/api/';
 //'http://10.127.214.252/citisense/api/';
 //'http://192.168.83.252/citisense/api/';
@@ -338,7 +338,7 @@ class _NotificationPageState extends State<NotificationPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
@@ -374,11 +374,11 @@ class _NotificationPageState extends State<NotificationPage>
                     maxLines: 1,
                     softWrap: false,
                     style: const TextStyle(
-                      fontFamily: 'Biennale',
+                      fontFamily: appFontFamily,
                       fontSize: 37,
                       fontWeight: FontWeight.w800,
                       height: 1.15,
-                      color: Color(0xFF0E235B),
+                      color: AppColors.ink,
                     ),
                   ),
                 ),
@@ -391,36 +391,20 @@ class _NotificationPageState extends State<NotificationPage>
               child: Text(
                 'Stay updated with your reports and announcements.',
                 style: const TextStyle(
-                  fontFamily: 'Biennale',
+                  fontFamily: appFontFamily,
                   fontSize: 16,
                   height: 1.5,
                   color: textGrey,
                 ),
               ),
             ),
-            // Replace this placeholder with your mascot Image.asset later.
+            // Mascot (static pose for this page).
             Positioned(
               right: 18,
-              top: 91,
-              bottom: 10,
+              top: 84,
+              bottom: 6,
               width: (constraints.maxWidth - 44) * 0.40,
-              child: Container(
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEAF3FF),
-                  border: Border.all(color: const Color(0xFFCFE1FF)),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: const Text(
-                  'Mascot\nplaceholder',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'Biennale',
-                    fontSize: 13,
-                    color: textGrey,
-                  ),
-                ),
-              ),
+              child: const CitiMascot(pose: MascotPose.notification),
             ),
           ],
         ),
@@ -429,52 +413,54 @@ class _NotificationPageState extends State<NotificationPage>
   }
 
   Widget _buildTabsPanel() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(18, 0, 18, 9),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(23),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF253F7A).withValues(alpha: 0.07),
-            blurRadius: 16,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
       child: Column(
         children: [
-          Row(
-            children: [
-              _buildTab(label: 'All', value: 'all'),
-              const SizedBox(width: 5),
-              _buildTab(label: 'Announcements', value: 'announcements'),
-            ],
+          // Same segmented style as the filters on My Reports.
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              boxShadow: AppShadows.soft,
+            ),
+            child: Row(
+              children: [
+                _buildTab(label: 'All', value: 'all'),
+                _buildTab(label: 'Announcements', value: 'announcements'),
+              ],
+            ),
           ),
           // Keep existing mark-all-as-read functionality without crowding tabs.
-          if (unreadCount > 0 || isMarkingAll)
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: isMarkingAll ? null : markAllAsRead,
-                icon: isMarkingAll
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.done_all, size: 16),
-                label: Text('Mark all as read ($unreadCount)'),
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF1762EE),
-                  textStyle: const TextStyle(fontSize: 11),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-            )
-          else
-            const SizedBox(height: 6),
+          SizedBox(
+            height: 40,
+            child: (unreadCount > 0 || isMarkingAll)
+                ? Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: isMarkingAll ? null : markAllAsRead,
+                      icon: isMarkingAll
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.done_all, size: 16),
+                      label: Text('Mark all as read ($unreadCount)'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        textStyle: const TextStyle(
+                          fontFamily: appFontFamily,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  )
+                : null,
+          ),
         ],
       ),
     );
@@ -485,30 +471,23 @@ class _NotificationPageState extends State<NotificationPage>
     return Expanded(
       child: InkWell(
         onTap: () => setState(() => selectedTab = value),
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(14),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 3),
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 2),
           decoration: BoxDecoration(
-            gradient: selected
-                ? const LinearGradient(
-                    colors: [Color(0xFF2B7AFF), Color(0xFF0554EC)],
-                  )
-                : null,
-            color: selected ? null : Colors.white,
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(
-              color: selected ? Colors.transparent : const Color(0xFFBDD2FF),
-            ),
+            color: selected ? AppColors.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
           ),
           child: Text(
             label,
+            maxLines: 1,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontFamily: 'Biennale',
+              fontFamily: appFontFamily,
               fontSize: 13,
               fontWeight: FontWeight.w700,
-              color: selected ? Colors.white : const Color(0xFF1462F3),
+              color: selected ? Colors.white : textGrey,
             ),
           ),
         ),
@@ -564,7 +543,7 @@ class _NotificationPageState extends State<NotificationPage>
                   : 'No notifications yet',
               textAlign: TextAlign.center,
               style: const TextStyle(
-                fontFamily: 'Biennale',
+                fontFamily: appFontFamily,
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: darkBlue,
@@ -586,9 +565,9 @@ class _NotificationPageState extends State<NotificationPage>
       onRefresh: fetchNotifications,
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(18, 5, 18, 24),
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
         itemCount: items.length,
-        separatorBuilder: (context, index) => const SizedBox(height: 11),
+        separatorBuilder: (context, index) => const SizedBox(height: 12),
         itemBuilder: (context, index) => _buildNotificationCard(items[index]),
       ),
     );
@@ -604,15 +583,19 @@ class _NotificationPageState extends State<NotificationPage>
     final resolved = lower.contains('resolved') || lower.contains('complete');
     final inProgress = lower.contains('progress') || lower.contains('review');
     final Color accent = isAnnouncement
-        ? const Color(0xFFFFBD36)
+        ? AppColors.warning
         : resolved
-        ? const Color(0xFF11B86A)
-        : const Color(0xFF1768F7);
+        ? AppColors.success
+        : inProgress
+        ? AppColors.primary
+        : AppColors.warning;
     final Color iconBackground = isAnnouncement
-        ? const Color(0xFFFFF4DE)
+        ? AppColors.warningSoft
         : resolved
-        ? const Color(0xFFE0F7EA)
-        : const Color(0xFFE8EFFF);
+        ? AppColors.successSoft
+        : inProgress
+        ? AppColors.primarySoft
+        : AppColors.warningSoft;
     final IconData leadingIcon = isAnnouncement
         ? Icons.notifications_active_rounded
         : resolved
@@ -621,118 +604,119 @@ class _NotificationPageState extends State<NotificationPage>
         ? Icons.assignment_turned_in_outlined
         : Icons.chat_bubble_rounded;
 
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(22),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(22),
-        onTap: () => markAsRead(item),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 17),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF294C8C).withValues(alpha: 0.07),
-                blurRadius: 14,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(
-                  color: iconBackground,
-                  shape: BoxShape.circle,
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        boxShadow: AppShadows.card,
+        // Unread items get a subtle blue outline so they stand out.
+        border: Border.all(
+          color: isRead ? Colors.transparent : AppColors.primaryBorder,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          onTap: () => markAsRead(item),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: iconBackground,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(leadingIcon, color: accent, size: 28),
                 ),
-                child: Icon(leadingIcon, color: accent, size: 31),
-              ),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title,
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: const TextStyle(
+                                color: AppColors.ink,
+                                fontFamily: appFontFamily,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            timestamp,
                             style: const TextStyle(
-                              color: Color(0xFF10195B),
-                              fontFamily: 'Biennale',
-                              fontWeight: FontWeight.w800,
-                              fontSize: 16,
+                              color: AppColors.textMuted,
+                              fontFamily: appFontFamily,
+                              fontSize: 12,
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          timestamp,
-                          style: const TextStyle(
-                            color: textGrey,
-                            fontFamily: 'Biennale',
-                            fontSize: 11,
-                          ),
-                        ),
-                        if (!isRead) ...[
-                          const SizedBox(width: 7),
-                          Container(
-                            width: 8,
-                            height: 8,
-                            margin: const EdgeInsets.only(top: 4),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF0863FF),
-                              shape: BoxShape.circle,
+                          if (!isRead) ...[
+                            const SizedBox(width: 7),
+                            Container(
+                              width: 8,
+                              height: 8,
+                              margin: const EdgeInsets.only(top: 4),
+                              decoration: const BoxDecoration(
+                                color: AppColors.primary,
+                                shape: BoxShape.circle,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      message,
-                      style: const TextStyle(
-                        color: textGrey,
-                        fontSize: 13,
-                        height: 1.5,
-                        fontFamily: 'Biennale',
                       ),
-                    ),
-                    if (!isAnnouncement) ...[
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
+                      const SizedBox(height: 6),
+                      Text(
+                        message,
+                        style: const TextStyle(
+                          color: textGrey,
+                          fontSize: 13,
+                          height: 1.5,
+                          fontFamily: appFontFamily,
                         ),
-                        decoration: BoxDecoration(
-                          color: iconBackground,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          resolved
-                              ? 'Resolved'
-                              : inProgress
-                              ? 'In Progress'
-                              : 'Pending',
-                          style: TextStyle(
-                            color: accent,
-                            fontSize: 11,
-                            fontFamily: 'Biennale',
-                            fontWeight: FontWeight.w700,
+                      ),
+                      if (!isAnnouncement) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: iconBackground,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            resolved
+                                ? 'Resolved'
+                                : inProgress
+                                ? 'In Progress'
+                                : 'Pending',
+                            style: TextStyle(
+                              color: accent,
+                              fontSize: 11,
+                              fontFamily: appFontFamily,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

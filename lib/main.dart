@@ -1,5 +1,6 @@
 import 'package:citisense/landing.dart';
 import 'package:citisense/app_settings.dart';
+import 'package:citisense/app_theme.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -39,6 +40,8 @@ class MyApp extends StatelessWidget {
       builder: (context, scale, child) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
+          title: 'CitiSense',
+          theme: AppTheme.light,
           home: const LandingPage(),
           builder: (context, child) {
             final mediaQuery = MediaQuery.of(context);
