@@ -478,7 +478,7 @@ try {
 
     $imagesID = generateNextID(
         $conn,
-        "reportImages",
+        "reportimages",
         "imagesID",
         "IMG"
     );
@@ -717,7 +717,7 @@ try {
     // ========================================================
 
     $stmt = $conn->prepare("
-        INSERT INTO reportImages (
+        INSERT INTO reportimages (
             imagesID,
             reportID,
             imagePath,
@@ -859,6 +859,8 @@ try {
         "success" => false,
         "message" => $e->getMessage()
     ]);
+
+    
 }
 
 

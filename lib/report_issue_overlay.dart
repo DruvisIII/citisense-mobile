@@ -978,8 +978,8 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw Exception(
-          'Server returned HTTP '
-          '${response.statusCode}.',
+          'Server returned HTTP ${response.statusCode}.\n'
+          'Response: ${response.body}',
         );
       }
 
