@@ -27,8 +27,7 @@ class EmailVerification extends StatefulWidget {
 }
 
 class _EmailVerificationState extends State<EmailVerification> {
-  static const String _verifyUrl =
-      '$serverBaseUrl/api/verify_registration_otp.php';
+  static const String _verifyUrl = '$apiBaseUrl/verify_registration_otp.php';
 
   final TextEditingController _otpController = TextEditingController();
 

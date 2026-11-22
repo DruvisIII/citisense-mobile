@@ -12,7 +12,6 @@ import 'package:citisense/settings_page.dart';
 import 'package:citisense/my_reports.dart';
 import 'package:citisense/notification_page.dart';
 
-
 class HomePage extends StatefulWidget {
   // ============================================================
   // LOGGED-IN USER INFORMATION
@@ -78,12 +77,12 @@ class _HomePageState extends State<HomePage> {
 
   static const String _getProfileUrl =
       // 'http://192.168.1.6/citisense/api/get_profile.php';
-      '$serverBaseUrl/api/get_profile.php';
+      '$apiBaseUrl/get_profile.php';
   //'http://10.127.214.252/citisense/api/get_profile.php';
   //'http://192.168.83.252/citisense/api/get_profile.php';
   static const String _getAnnouncementsUrl =
       // 'http://192.168.1.6/citisense/api/get_announcements.php';
-      '$serverBaseUrl/api/get_announcements.php';
+      '$apiBaseUrl/get_announcements.php';
   //'http://10.127.214.252/citisense/api/get_announcements.php';
   //'http://192.168.83.252/citisense/api/get_announcements.php';
 
@@ -278,9 +277,7 @@ class _HomePageState extends State<HomePage> {
     if (currentID.isEmpty) return;
 
     try {
-      final uri = Uri.parse(
-        '$serverBaseUrl/api/get_barangays.php',
-      );
+      final uri = Uri.parse('$apiBaseUrl/get_barangays.php');
       debugPrint('[HOME] Barangays request URL: $uri');
       final response = await http
           .get(uri, headers: {'Accept': 'application/json'})

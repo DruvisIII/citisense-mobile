@@ -1,11 +1,9 @@
-// ============================================================
-// SERVER ADDRESS
-// ------------------------------------------------------------
-// Every API call and image URL in the app is built from this.
-// When your computer's IP changes, update serverIp only.
-// ============================================================
+const bool useRailway = true;
 
-const String serverIp = '192.168.1.48';
+const String serverBaseUrl = useRailway
+    ? 'https://citisense-api-production.up.railway.app'
+    : 'http://192.168.1.48/citisense';
 
-/// e.g. http://192.168.1.48/citisense
-const String serverBaseUrl = 'http://$serverIp/citisense';
+const String apiBaseUrl = useRailway ? serverBaseUrl : '$serverBaseUrl/api';
+
+const String imageBaseUrl = serverBaseUrl;

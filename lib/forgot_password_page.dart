@@ -14,7 +14,7 @@ class ForgotPasswordPage extends StatefulWidget {
 
 class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   // Keep this IP address synchronized with login.dart.
-  static const String _apiBaseUrl = '$serverBaseUrl/api';
+  static const String _apiBaseUrl = apiBaseUrl;
 
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();

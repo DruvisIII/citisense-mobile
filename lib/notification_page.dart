@@ -1,20 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
-import 'package:citisense/api_config.dart';
 
-import 'package:flutter/material.dart';
+import 'package:citisense/api_config.dart';
 import 'package:citisense/app_theme.dart';
 import 'package:citisense/live_updates.dart';
 import 'package:citisense/mascot.dart';
-import 'package:http/http.dart' as http;
-
-import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
-
-
-const String apiBaseUrl = '$serverBaseUrl/api/';
-//'http://192.168.1.48/citisense/api/';
-//'http://10.127.214.252/citisense/api/';
-//'http://192.168.83.252/citisense/api/';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 class NotificationPage extends StatefulWidget {
   final String userID;
@@ -43,40 +36,49 @@ class _NotificationPageState extends State<NotificationPage>
   StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
   StreamSubscription<RemoteMessage>? _openedAppSubscription;
 
+  // Builds API URLs consistently for local and Railway servers.
+  Uri _apiUri(String endpoint, {Map<String, String>? queryParameters}) {
+    final baseUrl = apiBaseUrl.replaceFirst(RegExp(r'/+$'), '');
+    final cleanEndpoint = endpoint.replaceFirst(RegExp(r'^/+'), '');
+
+    return Uri.parse(
+      '$baseUrl/$cleanEndpoint',
+    ).replace(queryParameters: queryParameters);
+  }
+
   @override
   void initState() {
     super.initState();
+
     WidgetsBinding.instance.addObserver(this);
     fetchNotifications();
 
-    // This is a second listener, only to reload the in-app list.
-    // The existing push notification service can still display the popup.
     _foregroundMessageSubscription = FirebaseMessaging.onMessage.listen(
       _onFirebaseMessage,
     );
+
     _openedAppSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
       _onFirebaseMessage,
     );
 
-    // Status updates, announcements, and barangay replies.
     LiveUpdates.instance.changes.addListener(_onLiveUpdate);
   }
 
   void _onLiveUpdate() {
-    if (mounted) fetchNotifications(showLoading: false);
+    if (mounted) {
+      fetchNotifications(showLoading: false);
+    }
   }
 
   void _onFirebaseMessage(RemoteMessage message) {
     if (!mounted) return;
-    // Any push (status update, announcement, barangay reply): read fresh
-    // notifications from MySQL instead of trusting push text.
+
     fetchNotifications(showLoading: false);
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && mounted) {
-      // Covers messages received while the app was in the background.
       fetchNotifications(showLoading: false);
     }
   }
@@ -84,6 +86,7 @@ class _NotificationPageState extends State<NotificationPage>
   @override
   void didUpdateWidget(covariant NotificationPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+
     if (oldWidget.userID != widget.userID ||
         oldWidget.barangayID != widget.barangayID) {
       fetchNotifications(showLoading: false);
@@ -95,20 +98,26 @@ class _NotificationPageState extends State<NotificationPage>
     LiveUpdates.instance.changes.removeListener(_onLiveUpdate);
     _foregroundMessageSubscription?.cancel();
     _openedAppSubscription?.cancel();
+
     WidgetsBinding.instance.removeObserver(this);
+
     super.dispose();
   }
 
   // Retrieve report notifications and barangay announcements.
-  // Background refreshes keep the current cards visible while loading.
   Future<void> fetchNotifications({bool showLoading = true}) async {
     if (widget.userID.trim().isEmpty || widget.barangayID.trim().isEmpty) {
+      if (!mounted) return;
+
       setState(() {
         isLoading = false;
         errorMessage = 'User information is missing.';
       });
+
       return;
     }
+
+    if (!mounted) return;
 
     setState(() {
       if (showLoading) isLoading = true;
@@ -116,19 +125,21 @@ class _NotificationPageState extends State<NotificationPage>
     });
 
     try {
-      final uri = Uri.parse('${apiBaseUrl}get_notifications.php').replace(
+      final uri = _apiUri(
+        'get_notifications.php',
         queryParameters: {
           'userID': widget.userID,
           'barangayID': widget.barangayID,
         },
       );
 
+      debugPrint('[NOTIFICATIONS] Request URL: $uri');
+
       final response = await http.get(uri);
 
       if (response.statusCode != 200) {
         throw Exception(
-          'Unable to load notifications. '
-          'HTTP ${response.statusCode}',
+          'Unable to load notifications. HTTP ${response.statusCode}',
         );
       }
 
@@ -170,6 +181,8 @@ class _NotificationPageState extends State<NotificationPage>
         isLoading = false;
         errorMessage = e.toString().replaceFirst('Exception: ', '');
       });
+
+      debugPrint('[NOTIFICATIONS] Error: $e');
     }
   }
 
@@ -257,8 +270,12 @@ class _NotificationPageState extends State<NotificationPage>
     final type = notification['type']?.toString() ?? '';
 
     try {
+      final uri = _apiUri('mark_notification_read.php');
+
+      debugPrint('[NOTIFICATIONS] Mark as read URL: $uri');
+
       final response = await http.post(
-        Uri.parse('${apiBaseUrl}mark_notification_read.php'),
+        uri,
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -301,8 +318,12 @@ class _NotificationPageState extends State<NotificationPage>
     });
 
     try {
+      final uri = _apiUri('mark_all_notifications_read.php');
+
+      debugPrint('[NOTIFICATIONS] Mark all as read URL: $uri');
+
       final response = await http.post(
-        Uri.parse('${apiBaseUrl}mark_all_notifications_read.php'),
+        uri,
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -342,9 +363,7 @@ class _NotificationPageState extends State<NotificationPage>
     }
   }
 
-  // ============================================================
-  // NOTIFICATIONS SCREEN — VISUAL REDESIGN
-  // ============================================================
+  // NOTIFICATIONS SCREEN
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -362,7 +381,6 @@ class _NotificationPageState extends State<NotificationPage>
   }
 
   // Shared header geometry for Notifications and Settings.
-  // Keep these measurements identical in both pages.
   Widget _buildHeader() {
     return SizedBox(
       width: double.infinity,
@@ -408,13 +426,15 @@ class _NotificationPageState extends State<NotificationPage>
                 ),
               ),
             ),
-            // Mascot (static pose for this page).
             Positioned(
               right: 18,
               top: 84,
               bottom: 6,
               width: (constraints.maxWidth - 44) * 0.40,
-              child: const CitiMascot(pose: MascotPose.notification, backdrop: true),
+              child: const CitiMascot(
+                pose: MascotPose.notification,
+                backdrop: true,
+              ),
             ),
           ],
         ),
@@ -427,7 +447,6 @@ class _NotificationPageState extends State<NotificationPage>
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
       child: Column(
         children: [
-          // Same segmented style as the filters on My Reports.
           Container(
             padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
@@ -442,7 +461,6 @@ class _NotificationPageState extends State<NotificationPage>
               ],
             ),
           ),
-          // Keep existing mark-all-as-read functionality without crowding tabs.
           SizedBox(
             height: 40,
             child: (unreadCount > 0 || isMarkingAll)
@@ -478,6 +496,7 @@ class _NotificationPageState extends State<NotificationPage>
 
   Widget _buildTab({required String label, required String value}) {
     final selected = selectedTab == value;
+
     return Expanded(
       child: InkWell(
         onTap: () => setState(() => selectedTab = value),
@@ -532,6 +551,7 @@ class _NotificationPageState extends State<NotificationPage>
     }
 
     final items = visibleNotifications;
+
     if (items.isEmpty) {
       return RefreshIndicator(
         onRefresh: fetchNotifications,
@@ -578,7 +598,9 @@ class _NotificationPageState extends State<NotificationPage>
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
         itemCount: items.length,
         separatorBuilder: (context, index) => const SizedBox(height: 12),
-        itemBuilder: (context, index) => _buildNotificationCard(items[index]),
+        itemBuilder: (context, index) {
+          return _buildNotificationCard(items[index]);
+        },
       ),
     );
   }
@@ -589,9 +611,13 @@ class _NotificationPageState extends State<NotificationPage>
     final title = item['title']?.toString() ?? 'Notification';
     final message = item['message']?.toString() ?? '';
     final timestamp = formatRelativeTime(item['timestamp']?.toString());
+
     final lower = title.toLowerCase();
+
     final resolved = lower.contains('resolved') || lower.contains('complete');
+
     final inProgress = lower.contains('progress') || lower.contains('review');
+
     final Color accent = isAnnouncement
         ? AppColors.warning
         : resolved
@@ -599,6 +625,7 @@ class _NotificationPageState extends State<NotificationPage>
         : inProgress
         ? AppColors.primary
         : AppColors.warning;
+
     final Color iconBackground = isAnnouncement
         ? AppColors.warningSoft
         : resolved
@@ -606,6 +633,7 @@ class _NotificationPageState extends State<NotificationPage>
         : inProgress
         ? AppColors.primarySoft
         : AppColors.warningSoft;
+
     final IconData leadingIcon = isAnnouncement
         ? Icons.notifications_active_rounded
         : resolved
@@ -619,7 +647,6 @@ class _NotificationPageState extends State<NotificationPage>
         color: Colors.white,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         boxShadow: AppShadows.card,
-        // Unread items get a subtle blue outline so they stand out.
         border: Border.all(
           color: isRead ? Colors.transparent : AppColors.primaryBorder,
         ),

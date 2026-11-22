@@ -30,11 +30,9 @@ class BarangaySelection extends StatefulWidget {
 }
 
 class _BarangaySelectionState extends State<BarangaySelection> {
-  static const String _getBarangaysUrl =
-      '$serverBaseUrl/api/get_barangays.php';
+  static const String _getBarangaysUrl = '$apiBaseUrl/get_barangays.php';
 
-  static const String _registerUrl =
-      '$serverBaseUrl/api/register.php';
+  static const String _registerUrl = '$apiBaseUrl/register.php';
 
   List<Map<String, String>> _barangays = [];
   List<Map<String, String>> _filteredBarangays = [];
@@ -242,100 +240,103 @@ class _BarangaySelectionState extends State<BarangaySelection> {
           Padding(
             padding: const EdgeInsets.only(left: 40),
             child: Material(
-        color: isSelected ? AppColors.primarySoft : AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          onTap: _isRegistering
-              ? null
-              : () {
-                  setState(() {
-                    _selectedBarangayId = barangayId;
-                  });
-                },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
+              color: isSelected ? AppColors.primarySoft : AppColors.surface,
               borderRadius: BorderRadius.circular(AppRadius.md),
-              border: Border.all(
-                color: isSelected ? AppColors.primary : AppColors.border,
-                width: isSelected ? 1.6 : 1,
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                onTap: _isRegistering
+                    ? null
+                    : () {
+                        setState(() {
+                          _selectedBarangayId = barangayId;
+                        });
+                      },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppColors.surface
-                        : AppColors.primarySoft,
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    border: Border.all(
+                      color: isSelected ? AppColors.primary : AppColors.border,
+                      width: isSelected ? 1.6 : 1,
+                    ),
                   ),
-                  child: const Icon(
-                    Icons.location_city_outlined,
-                    color: AppColors.primary,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      Text(
-                        barangayName,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontFamily: appFontFamily,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.ink,
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.surface
+                              : AppColors.primarySoft,
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                        ),
+                        child: const Icon(
+                          Icons.location_city_outlined,
+                          color: AppColors.primary,
+                          size: 24,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      const Text(
-                        'Cebu City',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontFamily: appFontFamily,
-                          color: AppColors.textSecondary,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              barangayName,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontFamily: appFontFamily,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.ink,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Cebu City',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontFamily: appFontFamily,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
+                      ),
+                      Container(
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isSelected
+                                ? AppColors.primary
+                                : AppColors.textMuted,
+                            width: 2,
+                          ),
+                        ),
+                        child: isSelected
+                            ? Center(
+                                child: Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: const BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              )
+                            : null,
                       ),
                     ],
                   ),
                 ),
-                Container(
-                  width: 22,
-                  height: 22,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: isSelected
-                          ? AppColors.primary
-                          : AppColors.textMuted,
-                      width: 2,
-                    ),
-                  ),
-                  child: isSelected
-                      ? Center(
-                          child: Container(
-                            width: 12,
-                            height: 12,
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        )
-                      : null,
-                ),
-              ],
+              ),
             ),
-          ),
-        ),
-      ),
           ),
           // Every card (including newly added barangays) gets a mascot
           // peeking from behind its left edge. Drawn on top so its hand
@@ -437,10 +438,7 @@ class _BarangaySelectionState extends State<BarangaySelection> {
 
                     Row(
                       children: [
-                        const Text(
-                          'BARANGAYS',
-                          style: AppText.sectionLabel,
-                        ),
+                        const Text('BARANGAYS', style: AppText.sectionLabel),
                         const Spacer(),
                         if (!_isLoading && _barangays.isNotEmpty)
                           Text(

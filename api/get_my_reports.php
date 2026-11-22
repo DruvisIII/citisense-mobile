@@ -1,3 +1,4 @@
+
 <?php
 
 header("Content-Type: application/json");
@@ -92,12 +93,12 @@ $sql = "
         SELECT
             reportID,
             MIN(imagesID) AS firstImageID
-        FROM reportImages
+        FROM reportimages
         GROUP BY reportID
     ) firstImage
         ON r.reportID = firstImage.reportID
 
-    LEFT JOIN reportImages ri
+    LEFT JOIN reportimages ri
         ON ri.imagesID = firstImage.firstImageID
 
     WHERE r.userID = ?

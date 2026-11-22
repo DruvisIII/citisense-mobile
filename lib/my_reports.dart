@@ -10,7 +10,6 @@ import 'package:citisense/report_engagement.dart';
 import 'package:citisense/mascot.dart';
 import 'package:http/http.dart' as http;
 
-
 // Parses MySQL/PHP date values consistently. Values without an explicit
 // timezone are treated as local device time (the usual SQL DATETIME format).
 DateTime? _parseReportDateTime(dynamic value) {
@@ -88,7 +87,7 @@ class MyReportsPage extends StatefulWidget {
 class _MyReportsPageState extends State<MyReportsPage> {
   static const String _getReportsUrl =
       // 'http://192.168.1.6/citisense/api/get_my_reports.php';
-      '$serverBaseUrl/api/get_my_reports.php';
+      '$apiBaseUrl/get_my_reports.php';
   // 'http://10.127.214.252/citisense/api/get_my_reports.php';
   //'http://192.168.83.252/citisense/api/get_my_reports.php';
   int _selectedFilter = 1;
@@ -766,7 +765,10 @@ class _MyReportsPageState extends State<MyReportsPage> {
               ),
               child: TextField(
                 onChanged: (value) => setState(() => _searchQuery = value),
-                style: const TextStyle(fontFamily: appFontFamily, color: darkBlue),
+                style: const TextStyle(
+                  fontFamily: appFontFamily,
+                  color: darkBlue,
+                ),
                 decoration: InputDecoration(
                   hintText: 'Search report...',
                   hintStyle: const TextStyle(
@@ -789,7 +791,10 @@ class _MyReportsPageState extends State<MyReportsPage> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(AppRadius.md),
-                    borderSide: const BorderSide(color: primaryBlue, width: 1.6),
+                    borderSide: const BorderSide(
+                      color: primaryBlue,
+                      width: 1.6,
+                    ),
                   ),
                   contentPadding: const EdgeInsets.symmetric(vertical: 16),
                 ),
@@ -825,9 +830,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
     final statusColor = _getStatusColor(report);
     final category = _getCategoryName(report);
     final categoryIsPothole = category.toLowerCase().contains('pothole');
-    final categoryColor = categoryIsPothole
-        ? AppColors.accent
-        : primaryBlue;
+    final categoryColor = categoryIsPothole ? AppColors.accent : primaryBlue;
     return InkWell(
       onTap: () => _openReportDetails(report),
       borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -1092,7 +1095,10 @@ class _MyReportsPageState extends State<MyReportsPage> {
               ),
               child: const Text(
                 'Try Again',
-                style: TextStyle(color: Colors.white, fontFamily: appFontFamily),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontFamily: appFontFamily,
+                ),
               ),
             ),
           ],

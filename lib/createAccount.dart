@@ -16,8 +16,7 @@ class CreateAccount extends StatefulWidget {
 }
 
 class _CreateAccountState extends State<CreateAccount> {
-  static const String _sendOtpUrl =
-      '$serverBaseUrl/api/send_registration_otp.php';
+  static const String _sendOtpUrl = '$apiBaseUrl/send_registration_otp.php';
 
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();

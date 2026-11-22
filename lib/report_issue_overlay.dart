@@ -20,15 +20,13 @@ import 'package:permission_handler/permission_handler.dart';
 // AI CLASSIFICATION BACKEND
 // ============================================================
 
-const String aiClassificationUrl =
-    '$serverBaseUrl/api/classify_image.php';
+const String aiClassificationUrl = '$apiBaseUrl/classify_image.php';
 
 // ============================================================
 // REPORT SUBMISSION BACKEND
 // ============================================================
 
-const String submitReportUrl =
-    '$serverBaseUrl/api/submit_report.php';
+const String submitReportUrl = '$apiBaseUrl/submit_report.php';
 
 // ============================================================
 // REPORT ISSUE OVERLAY
@@ -184,15 +182,15 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
         }
       } else {
         // GALLERY: use the GPS coordinates saved inside the photo.
-        final LatLng? photoLocation = await _getGpsLocationFromExif(
-          imageBytes,
-        );
+        final LatLng? photoLocation = await _getGpsLocationFromExif(imageBytes);
         if (!mounted) return;
 
         if (photoLocation != null) {
           await _setSuggestedLocation(photoLocation);
           if (mounted) {
-            setState(() => _locationNote = 'Pinned using the photo\'s location.');
+            setState(
+              () => _locationNote = 'Pinned using the photo\'s location.',
+            );
           }
         } else {
           // No GPS in the photo: the user pins it manually. The map will
@@ -1299,7 +1297,9 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
       hintText: hint,
       filled: true,
       fillColor: Colors.white,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+      ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AppRadius.sm),
         borderSide: const BorderSide(color: AppColors.border),
@@ -1462,7 +1462,9 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                             decoration: BoxDecoration(
                               color: AppColors.primarySoft,
                               borderRadius: BorderRadius.circular(AppRadius.md),
-                              border: Border.all(color: AppColors.primaryBorder),
+                              border: Border.all(
+                                color: AppColors.primaryBorder,
+                              ),
                             ),
                             child: _selectedImageBytes != null
                                 ? Image.memory(
@@ -1507,7 +1509,10 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                                 Expanded(
                                   child: Text(
                                     'AI is analyzing the photo...',
-                                    style: TextStyle(fontSize: 12, color: muted),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: muted,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1552,34 +1557,34 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                           trailing: !_aiEnabled
                               ? null
                               : Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.accentSoft,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.auto_awesome,
-                                  size: 14,
-                                  color: AppColors.accent,
-                                ),
-                                SizedBox(width: 5),
-                                Text(
-                                  'AI Suggestion',
-                                  style: TextStyle(
-                                    color: AppColors.accent,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accentSoft,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.auto_awesome,
+                                        size: 14,
+                                        color: AppColors.accent,
+                                      ),
+                                      SizedBox(width: 5),
+                                      Text(
+                                        'AI Suggestion',
+                                        style: TextStyle(
+                                          color: AppColors.accent,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
@@ -1807,7 +1812,9 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                                   minimumSize: const Size(0, 54),
                                   side: const BorderSide(color: fieldBlue),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.sm,
+                                    ),
                                   ),
                                 ),
                                 child: const Text(
@@ -1830,7 +1837,9 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                                   foregroundColor: Colors.white,
                                   minimumSize: const Size(0, 54),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.sm,
+                                    ),
                                   ),
                                 ),
                                 child: _isSubmitting
@@ -2043,16 +2052,16 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
                               ),
                             ),
                           if (_selectedLocation != null)
-                                Marker(
-                                  point: _selectedLocation!,
-                                  width: 50,
-                                  height: 60,
-                                  child: const Icon(
-                                    Icons.location_on,
-                                    size: 48,
-                                    color: AppColors.primary,
-                                  ),
-                                ),
+                            Marker(
+                              point: _selectedLocation!,
+                              width: 50,
+                              height: 60,
+                              child: const Icon(
+                                Icons.location_on,
+                                size: 48,
+                                color: AppColors.primary,
+                              ),
+                            ),
                         ],
                       ),
 

@@ -25,7 +25,7 @@ class _LoginPageState extends State<LoginPage> {
 
   static const String _loginUrl =
       // 'http://10.186.51.252/citisense/api/login.php';
-      '$serverBaseUrl/api/login.php';
+      '$apiBaseUrl/login.php';
   //'http://10.127.214.252/citisense/api/login.php';
   //'http://192.168.83.252/citisense/api/login.php';
 

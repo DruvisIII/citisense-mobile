@@ -13,8 +13,7 @@ import 'notification_preference.dart';
 
 import 'app_settings.dart';
 
-
-const String baseUrl = '$serverBaseUrl/api';
+const String baseUrl = apiBaseUrl;
 // 'http://192.168.1.6/citisense/api';
 
 class SettingsPage extends StatefulWidget {
@@ -255,7 +254,10 @@ class _SettingsPageState extends State<SettingsPage> {
               top: 84,
               bottom: 6,
               width: (constraints.maxWidth - 44) * 0.40,
-              child: const CitiMascot(pose: MascotPose.settings, backdrop: true),
+              child: const CitiMascot(
+                pose: MascotPose.settings,
+                backdrop: true,
+              ),
             ),
           ],
         ),
@@ -590,41 +592,41 @@ class _SettingsPageState extends State<SettingsPage> {
     onTap: _logout,
     padding: const EdgeInsets.all(16),
     child: Row(
-        children: [
-          _buildIconCircle(
-            Icons.logout_rounded,
-            AppColors.dangerSoft,
-            AppColors.danger,
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
-                  'Log Out',
-                  style: TextStyle(
-                    fontFamily: appFontFamily,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.danger,
-                  ),
+      children: [
+        _buildIconCircle(
+          Icons.logout_rounded,
+          AppColors.dangerSoft,
+          AppColors.danger,
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text(
+                'Log Out',
+                style: TextStyle(
+                  fontFamily: appFontFamily,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.danger,
                 ),
-                SizedBox(height: 6),
-                Text(
-                  'Sign out of your account.',
-                  style: TextStyle(
-                    fontFamily: appFontFamily,
-                    fontSize: 12.5,
-                    color: textGrey,
-                  ),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'Sign out of your account.',
+                style: TextStyle(
+                  fontFamily: appFontFamily,
+                  fontSize: 12.5,
+                  color: textGrey,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const Icon(Icons.chevron_right_rounded, color: textGrey, size: 28),
-        ],
-      ),
+        ),
+        const Icon(Icons.chevron_right_rounded, color: textGrey, size: 28),
+      ],
+    ),
   );
 
   Widget _fontOption(String label, String selected) {
@@ -1304,7 +1306,10 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
         ),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(color: textGrey, fontFamily: appFontFamily),
+          labelStyle: const TextStyle(
+            color: textGrey,
+            fontFamily: appFontFamily,
+          ),
           prefixIcon: Icon(icon, color: primaryBlue),
           filled: true,
           fillColor: Colors.white,
@@ -1834,165 +1839,165 @@ class _EmailChangeVerificationPageState
         if (!didPop) _cancel();
       },
       child: Scaffold(
-      backgroundColor: AppColors.surface,
-      appBar: AppBar(
         backgroundColor: AppColors.surface,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-          onPressed: _isVerifying ? null : _cancel,
+        appBar: AppBar(
+          backgroundColor: AppColors.surface,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+            onPressed: _isVerifying ? null : _cancel,
+          ),
         ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: AppColors.primarySoft,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                  child: const Icon(
+                    Icons.mark_email_read_outlined,
+                    color: AppColors.primary,
+                    size: 28,
+                  ),
                 ),
-                child: const Icon(
-                  Icons.mark_email_read_outlined,
-                  color: AppColors.primary,
-                  size: 28,
+                const SizedBox(height: 20),
+                const Text('Verify Your New Email', style: AppText.pageTitle),
+                const SizedBox(height: 8),
+                const Text(
+                  'To make sure this email is active and belongs to you, we sent '
+                  'a six-digit code to:',
+                  style: AppText.subtitle,
                 ),
-              ),
-              const SizedBox(height: 20),
-              const Text('Verify Your New Email', style: AppText.pageTitle),
-              const SizedBox(height: 8),
-              const Text(
-                'To make sure this email is active and belongs to you, we sent '
-                'a six-digit code to:',
-                style: AppText.subtitle,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                widget.newEmail,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontFamily: appFontFamily,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.primary,
+                const SizedBox(height: 4),
+                Text(
+                  widget.newEmail,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontFamily: appFontFamily,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 32),
-              const Text('Verification Code', style: AppText.fieldLabel),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _otpController,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                autofocus: true,
-                textAlign: TextAlign.center,
-                onSubmitted: (_) => _isVerifying ? null : _verify(),
-                style: const TextStyle(
-                  fontFamily: appFontFamily,
-                  fontSize: 20,
-                  letterSpacing: 8,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.ink,
+                const SizedBox(height: 32),
+                const Text('Verification Code', style: AppText.fieldLabel),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _otpController,
+                  keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  autofocus: true,
+                  textAlign: TextAlign.center,
+                  onSubmitted: (_) => _isVerifying ? null : _verify(),
+                  style: const TextStyle(
+                    fontFamily: appFontFamily,
+                    fontSize: 20,
+                    letterSpacing: 8,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: '••••••',
+                    counterText: '',
+                    errorText: _error,
+                    errorMaxLines: 3,
+                  ),
                 ),
-                decoration: InputDecoration(
-                  hintText: '••••••',
-                  counterText: '',
-                  errorText: _error,
-                  errorMaxLines: 3,
+                const SizedBox(height: 28),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: _isVerifying ? null : _verify,
+                    child: _isVerifying
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text('Verify Email'),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 28),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _isVerifying ? null : _verify,
-                  child: _isVerifying
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: Colors.white,
+                const SizedBox(height: 16),
+                Center(
+                  child: _secondsLeft > 0
+                      ? Text(
+                          'Resend code in ${_secondsLeft}s',
+                          style: const TextStyle(
+                            fontFamily: appFontFamily,
+                            fontSize: 13,
+                            color: AppColors.textMuted,
                           ),
                         )
-                      : const Text('Verify Email'),
+                      : TextButton(
+                          onPressed: _isResending ? null : _resend,
+                          child: Text(
+                            _isResending ? 'Sending...' : 'Resend Code',
+                          ),
+                        ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Center(
-                child: _secondsLeft > 0
-                    ? Text(
-                        'Resend code in ${_secondsLeft}s',
-                        style: const TextStyle(
+                const SizedBox(height: 28),
+
+                // Way out for users who changed their mind or can't open
+                // the new inbox. Nothing is changed.
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceMuted,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    border: Border.all(color: AppColors.divider),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Can't access this email?",
+                        style: AppText.fieldLabel,
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'If you changed your mind, the address is no longer '
+                        'active, or you can\'t sign in to it, go back. Your '
+                        'current email will stay the same.',
+                        style: TextStyle(
                           fontFamily: appFontFamily,
                           fontSize: 13,
-                          color: AppColors.textMuted,
-                        ),
-                      )
-                    : TextButton(
-                        onPressed: _isResending ? null : _resend,
-                        child: Text(
-                          _isResending ? 'Sending...' : 'Resend Code',
+                          height: 1.45,
+                          color: AppColors.textSecondary,
                         ),
                       ),
-              ),
-              const SizedBox(height: 28),
-
-              // Way out for users who changed their mind or can't open
-              // the new inbox. Nothing is changed.
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceMuted,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  border: Border.all(color: AppColors.divider),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 46,
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(46),
+                            backgroundColor: AppColors.surface,
+                          ),
+                          onPressed: _isVerifying ? null : _cancel,
+                          child: const Text('Keep My Current Email'),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Can't access this email?",
-                      style: AppText.fieldLabel,
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'If you changed your mind, the address is no longer '
-                      'active, or you can\'t sign in to it, go back. Your '
-                      'current email will stay the same.',
-                      style: TextStyle(
-                        fontFamily: appFontFamily,
-                        fontSize: 13,
-                        height: 1.45,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 46,
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(46),
-                          backgroundColor: AppColors.surface,
-                        ),
-                        onPressed: _isVerifying ? null : _cancel,
-                        child: const Text('Keep My Current Email'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 32),
-            ],
+                const SizedBox(height: 32),
+              ],
+            ),
           ),
         ),
       ),
-    ),
     );
   }
 }
@@ -2039,9 +2044,7 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
   }
 
   bool get _canSend =>
-      !_sending &&
-      _type != null &&
-      _messageController.text.trim().length >= 10;
+      !_sending && _type != null && _messageController.text.trim().length >= 10;
 
   Future<void> _send() async {
     if (!_canSend) return;
@@ -2171,9 +2174,8 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
                       minWidth: 44,
                       minHeight: 44,
                     ),
-                    onPressed: () => setState(
-                      () => _rating = _rating == i + 1 ? 0 : i + 1,
-                    ),
+                    onPressed: () =>
+                        setState(() => _rating = _rating == i + 1 ? 0 : i + 1),
                     icon: Icon(
                       i < _rating
                           ? Icons.star_rounded
@@ -2279,4 +2281,3 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
     );
   }
 }
-

@@ -23,7 +23,7 @@ import 'package:http/http.dart' as http;
 //   submit_report_feedback.php  POST userID, reportID, isFixed, rating, comment
 // ============================================================
 
-const String _apiUrl = '$serverBaseUrl/api';
+const String _apiUrl = apiBaseUrl;
 
 class ThreadItem {
   ThreadItem({
@@ -280,9 +280,9 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
 
   void _toast(String message) {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   // ------------------------------------------------------------
@@ -473,8 +473,12 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
               ...List.generate(
                 5,
                 (i) => Icon(
-                  i < fb.rating ? Icons.star_rounded : Icons.star_outline_rounded,
-                  color: i < fb.rating ? const Color(0xFFF5B800) : AppColors.border,
+                  i < fb.rating
+                      ? Icons.star_rounded
+                      : Icons.star_outline_rounded,
+                  color: i < fb.rating
+                      ? const Color(0xFFF5B800)
+                      : AppColors.border,
                   size: 24,
                 ),
               ),
@@ -566,11 +570,18 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
                 (i) => IconButton(
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                  constraints: const BoxConstraints(
+                    minWidth: 40,
+                    minHeight: 40,
+                  ),
                   onPressed: () => setState(() => _rating = i + 1),
                   icon: Icon(
-                    i < _rating ? Icons.star_rounded : Icons.star_outline_rounded,
-                    color: i < _rating ? const Color(0xFFF5B800) : AppColors.border,
+                    i < _rating
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    color: i < _rating
+                        ? const Color(0xFFF5B800)
+                        : AppColors.border,
                     size: 32,
                   ),
                 ),
@@ -681,7 +692,11 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 18, color: selected ? color : AppColors.textSecondary),
+              Icon(
+                icon,
+                size: 18,
+                color: selected ? color : AppColors.textSecondary,
+              ),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
@@ -777,7 +792,9 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
 
     for (final item in _items) {
       if (item.type == 'system') {
-        rows.add(_systemRow(item.message, item.createdAt, Icons.update_rounded));
+        rows.add(
+          _systemRow(item.message, item.createdAt, Icons.update_rounded),
+        );
       } else {
         rows.add(_bubble(item));
       }
@@ -885,7 +902,10 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
               ),
               const SizedBox(height: 3),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 13,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: mine ? AppColors.primary : Colors.white,
                   border: mine ? null : Border.all(color: AppColors.border),
@@ -970,8 +990,18 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
 
   String _formatStamp(DateTime d) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final hour = d.hour % 12 == 0 ? 12 : d.hour % 12;
     final period = d.hour >= 12 ? 'PM' : 'AM';

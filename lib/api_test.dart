@@ -13,7 +13,7 @@ class _ApiTestState extends State<ApiTest> {
   String result = 'Testing API...';
 
   Future<void> testApi() async {
-    const String url = '$serverBaseUrl/api/test_api.php';
+    const String url = '$apiBaseUrl/test_api.php';
     //'http://10.127.214.252/citisense/api/test_api.php';
     try {
       final response = await http.get(Uri.parse(url));
