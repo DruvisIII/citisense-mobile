@@ -131,7 +131,8 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 $stmt = $conn->prepare("
     SELECT
         userID,
-        profilePic
+        profilePic,
+        email
     FROM users
     WHERE userID = ?
     LIMIT 1
@@ -166,7 +167,33 @@ $user = $result->fetch_assoc();
 
 $oldProfilePic = $user["profilePic"];
 
+$currentEmail = (string)$user["email"];
+
 $stmt->close();
+
+
+/*
+|--------------------------------------------------------------------------
+| Only save a verified email
+|--------------------------------------------------------------------------
+|
+| A new email is saved by verify_email_change_otp.php after the user
+| confirms the code sent to it. This endpoint never changes the email
+| on its own, so an unverified email is rejected here.
+|
+*/
+
+if (strtolower(trim($currentEmail)) !== strtolower($email)) {
+    sendResponse(
+        false,
+        "Please verify your new email address before saving it.",
+        null,
+        403
+    );
+}
+
+// Keep the verified email exactly as stored.
+$email = $currentEmail;
 
 
 /*

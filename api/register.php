@@ -1,188 +1,313 @@
+
 <?php
 
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-header("Content-Type: application/json");
+header("Content-Type: application/json; charset=UTF-8");
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Accept");
 
+// Handle CORS preflight request
 if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
     http_response_code(200);
     exit;
 }
 
-require_once "config.php";   
+require_once "config.php";
 
-if ($_SERVER["REQUEST_METHOD"] !== "POST") {
-    echo json_encode([
-        "success" => false,
-        "message" => "Invalid request method."
-    ]);
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
+function respond($success, $message, $extra = [], $status = 200) {
+    http_response_code($status);
+
+    echo json_encode(array_merge([
+        "success" => $success,
+        "message" => $message
+    ], $extra));
+
     exit;
 }
 
+// Only allow POST requests
+if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+    respond(false, "Invalid request method.", [], 405);
+}
+
+// Receive registration details
 $firstName = trim($_POST["firstName"] ?? "");
 $lastName = trim($_POST["lastName"] ?? "");
-$email = trim($_POST["email"] ?? "");
+$email = strtolower(trim($_POST["email"] ?? ""));
 $password = $_POST["password"] ?? "";
 $contactNo = trim($_POST["contactNo"] ?? "");
-$barangayID = $_POST["barangayID"] ?? "";
+$barangayID = trim($_POST["barangayID"] ?? "");
+$registrationToken = trim($_POST["registrationToken"] ?? "");
 
+// Check required fields
 if (
-    empty($firstName) ||
-    empty($lastName) ||
-    empty($email) ||
-    empty($password) ||
-    empty($contactNo) ||
-    empty($barangayID)
+    $firstName === "" ||
+    $lastName === "" ||
+    $email === "" ||
+    $password === "" ||
+    $contactNo === "" ||
+    $barangayID === "" ||
+    $registrationToken === ""
 ) {
-    echo json_encode([
-        "success" => false,
-        "message" => "Please complete all required fields."
-    ]);
-    exit;
+    respond(false, "Please complete all required fields.");
 }
 
+// Validate email
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    echo json_encode([
-        "success" => false,
-        "message" => "Invalid email address."
-    ]);
-    exit;
+    respond(false, "Invalid email address.");
 }
 
-/*
-|--------------------------------------------------------------------------
-| Check if email already exists
-|--------------------------------------------------------------------------
-*/
+// Validate password
+if (strlen($password) < 6) {
+    respond(false, "Password must be at least 6 characters.");
+}
 
-$checkSql = "SELECT userID FROM users WHERE email = ?";
+// Normalize Philippine mobile number
+$digits = preg_replace('/\D/', '', $contactNo);
 
-$checkStmt = $conn->prepare($checkSql);
-$checkStmt->bind_param("s", $email);
-$checkStmt->execute();
+if (substr($digits, 0, 2) === "63") {
+    $digits = "0" . substr($digits, 2);
+}
 
-$checkResult = $checkStmt->get_result();
+if (!preg_match('/^09[0-9]{9}$/', $digits)) {
+    respond(
+        false,
+        "Please enter a valid Philippine mobile number (09XXXXXXXXX)."
+    );
+}
 
-if ($checkResult->num_rows > 0) {
-    echo json_encode([
-        "success" => false,
-        "message" => "Email is already registered."
-    ]);
+$contactNo = $digits;
+
+// Validate registration token format
+if (!preg_match('/^[a-f0-9]{64}$/', $registrationToken)) {
+    respond(false, "Invalid registration verification token.");
+}
+
+$tokenHash = hash("sha256", $registrationToken);
+
+try {
+
+    // Start database transaction
+    $conn->begin_transaction();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validate selected barangay
+    |--------------------------------------------------------------------------
+    */
+
+    $barangayStmt = $conn->prepare("
+        SELECT barangayID
+        FROM barangay
+        WHERE barangayID = ?
+        LIMIT 1
+    ");
+
+    $barangayStmt->bind_param("s", $barangayID);
+    $barangayStmt->execute();
+
+    $barangayResult = $barangayStmt->get_result();
+
+    if ($barangayResult->num_rows === 0) {
+        $barangayStmt->close();
+        $conn->rollback();
+
+        respond(false, "Invalid barangay selection.");
+    }
+
+    $barangayStmt->close();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Verify registration token
+    |--------------------------------------------------------------------------
+    */
+
+    $tokenStmt = $conn->prepare("
+        SELECT id
+        FROM registration_email_otps
+        WHERE email = ?
+          AND registration_token_hash = ?
+          AND verified_at IS NOT NULL
+          AND used_at IS NULL
+          AND expires_at > NOW()
+        ORDER BY id DESC
+        LIMIT 1
+        FOR UPDATE
+    ");
+
+    $tokenStmt->bind_param("ss", $email, $tokenHash);
+    $tokenStmt->execute();
+
+    $tokenResult = $tokenStmt->get_result();
+    $tokenRecord = $tokenResult->fetch_assoc();
+
+    $tokenStmt->close();
+
+    if (!$tokenRecord) {
+        $conn->rollback();
+
+        respond(
+            false,
+            "Email verification is invalid or has expired. Please verify your email again."
+        );
+    }
+
+    $otpRecordId = (int)$tokenRecord["id"];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Check duplicate email
+    |--------------------------------------------------------------------------
+    */
+
+    $checkStmt = $conn->prepare("
+        SELECT userID
+        FROM users
+        WHERE email = ?
+        LIMIT 1
+    ");
+
+    $checkStmt->bind_param("s", $email);
+    $checkStmt->execute();
+
+    $checkResult = $checkStmt->get_result();
+
+    if ($checkResult->num_rows > 0) {
+        $checkStmt->close();
+        $conn->rollback();
+
+        respond(false, "Email is already registered.");
+    }
 
     $checkStmt->close();
-    $conn->close();
-    exit;
-}
 
-$checkStmt->close();
+    /*
+    |--------------------------------------------------------------------------
+    | Generate User ID
+    |--------------------------------------------------------------------------
+    */
 
-/*
-|--------------------------------------------------------------------------
-| Generate User ID
-|--------------------------------------------------------------------------
-|
-| Existing IDs:
-| USR001
-| USR002
-| USR003
-| USR004
-|
-| Next:
-| USR005
-|
-*/
+    $idResult = $conn->query("
+        SELECT userID
+        FROM users
+        WHERE userID LIKE 'USR%'
+        ORDER BY CAST(SUBSTRING(userID, 4) AS UNSIGNED) DESC
+        LIMIT 1
+    ");
 
-$idSql = "
-    SELECT userID
-    FROM users
-    WHERE userID LIKE 'USR%'
-    ORDER BY CAST(SUBSTRING(userID, 4) AS UNSIGNED) DESC
-    LIMIT 1
-";
+    if ($idResult->num_rows > 0) {
+        $row = $idResult->fetch_assoc();
 
-$idStmt = $conn->prepare($idSql);
-$idStmt->execute();
+        $lastNumber = intval(substr($row["userID"], 3));
+        $nextNumber = $lastNumber + 1;
+    } else {
+        $nextNumber = 1;
+    }
 
-$idResult = $idStmt->get_result();
+    $userID = "USR" . str_pad(
+        $nextNumber,
+        3,
+        "0",
+        STR_PAD_LEFT
+    );
 
-if ($idResult->num_rows > 0) {
+    /*
+    |--------------------------------------------------------------------------
+    | Hash password
+    |--------------------------------------------------------------------------
+    */
 
-    $row = $idResult->fetch_assoc();
+    $hashedPassword = password_hash(
+        $password,
+        PASSWORD_DEFAULT
+    );
 
-    $lastUserID = $row["userID"];
+    $profilePic = null;
 
-    // Get the number after "USR"
-    $lastNumber = intval(substr($lastUserID, 3));
+    /*
+    |--------------------------------------------------------------------------
+    | Insert user
+    |--------------------------------------------------------------------------
+    */
 
-    // Add 1
-    $nextNumber = $lastNumber + 1;
+    $insertStmt = $conn->prepare("
+        INSERT INTO users
+        (
+            userID,
+            firstName,
+            lastName,
+            email,
+            pass,
+            contactNo,
+            profilePic,
+            barangayID
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ");
 
-} else {
+    $insertStmt->bind_param(
+        "ssssssss",
+        $userID,
+        $firstName,
+        $lastName,
+        $email,
+        $hashedPassword,
+        $contactNo,
+        $profilePic,
+        $barangayID
+    );
 
-    // No USR users yet
-    $nextNumber = 1;
-}
+    $insertStmt->execute();
+    $insertStmt->close();
 
-// Format as USR001, USR002, etc.
-$userID = "USR" . str_pad($nextNumber, 3, "0", STR_PAD_LEFT);
+    /*
+    |--------------------------------------------------------------------------
+    | Mark registration token as used
+    |--------------------------------------------------------------------------
+    */
 
-$idStmt->close();
+    $usedStmt = $conn->prepare("
+        UPDATE registration_email_otps
+        SET used_at = NOW()
+        WHERE id = ?
+          AND used_at IS NULL
+    ");
 
-/*
-|--------------------------------------------------------------------------
-| Hash password
-|--------------------------------------------------------------------------
-*/
+    $usedStmt->bind_param("i", $otpRecordId);
+    $usedStmt->execute();
 
-$hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+    if ($usedStmt->affected_rows !== 1) {
+        $usedStmt->close();
 
-$profilePic = null;
+        throw new Exception(
+            "Registration token could not be consumed."
+        );
+    }
 
-/*
-|--------------------------------------------------------------------------
-| Insert new user
-|--------------------------------------------------------------------------
-*/
+    $usedStmt->close();
 
-$sql = "INSERT INTO users
-        (userID, firstName, lastName, email, pass, contactNo, profilePic, barangayID)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+    // Commit account creation and token consumption together
+    $conn->commit();
 
-$stmt = $conn->prepare($sql);
-
-$stmt->bind_param(
-    "ssssssss",
-    $userID,
-    $firstName,
-    $lastName,
-    $email,
-    $hashedPassword,
-    $contactNo,
-    $profilePic,
-    $barangayID
-);
-
-if ($stmt->execute()) {
-
-    echo json_encode([
-        "success" => true,
-        "message" => "Account created successfully.",
+    respond(true, "Account created successfully.", [
         "userID" => $userID
     ]);
 
-} else {
+} catch (Throwable $e) {
 
-    echo json_encode([
-        "success" => false,
-        "message" => "Failed to create account."
-    ]);
+    $conn->rollback();
+
+    error_log("Registration error: " . $e->getMessage());
+
+    respond(
+        false,
+        "Failed to create account. Please try again.",
+        [],
+        500
+    );
 }
-
-$stmt->close();
-$conn->close();
 
 ?>
