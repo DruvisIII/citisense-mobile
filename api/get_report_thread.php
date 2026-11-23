@@ -15,6 +15,8 @@
 require_once __DIR__ . '/engagement_common.php';
 engagement_headers();
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/time_helpers.php';
 
 ensure_engagement_tables($conn);
 
@@ -24,6 +26,8 @@ $reportID = trim($_POST['reportID'] ?? '');
 if ($userID === '' || $reportID === '') {
     engagement_respond(false, 'User and report are required.', 400);
 }
+
+citisense_require_user($conn, $userID);
 
 $report = require_own_report($conn, $userID, $reportID);
 
@@ -35,7 +39,8 @@ $stmt = $conn->prepare(
     "SELECT message, dateSent
      FROM notification
      WHERE reportID = ? AND userID = ?
-       AND message NOT LIKE 'New reply from your barangay%'"
+       AND message NOT LIKE 'New reply from your barangay%'
+       AND message NOT LIKE 'The barangay replied about your report%'"
 );
 
 if ($stmt) {
@@ -47,7 +52,7 @@ if ($stmt) {
         $items[] = [
             'type' => 'system',
             'message' => (string)$row['message'],
-            'createdAt' => (string)$row['dateSent']
+            'createdAt' => citisense_iso_time($conn, $row['dateSent'])
         ];
     }
 
@@ -75,7 +80,7 @@ while ($row = $result->fetch_assoc()) {
         'id' => (int)$row['id'],
         'type' => (string)$row['senderType'],
         'message' => (string)$row['message'],
-        'createdAt' => (string)$row['created_at']
+        'createdAt' => citisense_iso_time($conn, $row['created_at'])
     ];
 }
 
@@ -83,7 +88,7 @@ $stmt->close();
 
 // Oldest first.
 usort($items, function ($a, $b) {
-    return strtotime($a['createdAt']) <=> strtotime($b['createdAt']);
+    return strtotime((string)$a['createdAt']) <=> strtotime((string)$b['createdAt']);
 });
 
 // Resident's feedback, if already given.
@@ -107,7 +112,7 @@ if ($stmt) {
             'isFixed' => (int)$row['is_fixed'] === 1,
             'rating' => (int)$row['rating'],
             'comment' => (string)($row['comment'] ?? ''),
-            'updatedAt' => (string)$row['updated_at']
+            'updatedAt' => citisense_iso_time($conn, $row['updated_at'])
         ];
     }
 }

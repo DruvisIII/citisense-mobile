@@ -58,7 +58,7 @@ try {
     ]);
 } catch (RoboflowWorkflowException $exception) {
     error_log('Roboflow workflow error: ' . $exception->getMessage());
-    sendRoboflowResponse(false, $exception->getMessage(), [], 502);
+    sendRoboflowResponse(false, 'The AI could not analyze this photo right now. Please choose a category yourself.', [], 502);
 } catch (Throwable $exception) {
     error_log('Roboflow prediction error: ' . $exception->getMessage());
     sendRoboflowResponse(false, 'Unable to process the Roboflow prediction.', [], 500);

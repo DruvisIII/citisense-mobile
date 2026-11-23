@@ -1,7 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:citisense/api_client.dart';
 import 'package:citisense/api_config.dart';
+import 'package:citisense/auth_session.dart';
+import 'package:citisense/barangay_messages_page.dart';
+import 'package:citisense/friendly_errors.dart';
 import 'package:citisense/app_theme.dart';
 import 'package:citisense/live_updates.dart';
 import 'package:citisense/mascot.dart';
@@ -135,36 +139,35 @@ class _NotificationPageState extends State<NotificationPage>
 
       debugPrint('[NOTIFICATIONS] Request URL: $uri');
 
-      final response = await http.get(uri);
+      final response = await http
+          .get(uri, headers: AuthSession.headers())
+          .timeout(const Duration(seconds: 30));
 
-      if (response.statusCode != 200) {
-        throw Exception(
-          'Unable to load notifications. HTTP ${response.statusCode}',
-        );
+      Map<String, dynamic>? result;
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) result = decoded;
+      } on FormatException {
+        result = null;
       }
 
-      final result = jsonDecode(response.body);
-
-      if (result['success'] != true) {
-        throw Exception(result['message'] ?? 'Failed to load notifications.');
+      if (response.statusCode != 200 || result?['success'] != true) {
+        throw Exception(FriendlyErrors.fromResponse(response));
       }
 
-      final List<dynamic> data = result['data'] ?? [];
+      final List<dynamic> data = result!['data'] is List
+          ? result['data'] as List
+          : const [];
 
-      final loadedNotifications = data.map((item) {
-        return Map<String, dynamic>.from(item);
-      }).toList();
+      final loadedNotifications = data
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
 
-      // Sort newest first.
+      // Newest first (the server already sorts; this keeps it stable).
       loadedNotifications.sort((a, b) {
-        final dateA =
-            DateTime.tryParse(a['timestamp']?.toString() ?? '') ??
-            DateTime(2000);
-
-        final dateB =
-            DateTime.tryParse(b['timestamp']?.toString() ?? '') ??
-            DateTime(2000);
-
+        final dateA = parseApiTime(a['timestamp']) ?? DateTime(2000);
+        final dateB = parseApiTime(b['timestamp']) ?? DateTime(2000);
         return dateB.compareTo(dateA);
       });
 
@@ -179,7 +182,7 @@ class _NotificationPageState extends State<NotificationPage>
 
       setState(() {
         isLoading = false;
-        errorMessage = e.toString().replaceFirst('Exception: ', '');
+        errorMessage = FriendlyErrors.fromException(e);
       });
 
       debugPrint('[NOTIFICATIONS] Error: $e');
@@ -201,65 +204,22 @@ class _NotificationPageState extends State<NotificationPage>
     return visibleNotifications.where((item) => item['isRead'] != true).length;
   }
 
-  // Format a timestamp into a relative time.
-  String formatRelativeTime(String? timestamp) {
-    if (timestamp == null || timestamp.isEmpty) {
-      return '';
+  // "Just now", "5 minutes ago", "Yesterday", ... in the phone's time zone.
+  String formatRelativeTime(String? timestamp) =>
+      relativeTime(parseApiTime(timestamp));
+
+  // Open what the notification is about, and mark it as read.
+  void _onNotificationTap(Map<String, dynamic> item) {
+    markAsRead(item);
+
+    if (item['kind'] == 'message') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BarangayMessagesPage(userID: widget.userID),
+        ),
+      );
     }
-
-    final date = DateTime.tryParse(timestamp);
-
-    if (date == null) {
-      return '';
-    }
-
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.isNegative || difference.inSeconds < 60) {
-      return 'Just now';
-    }
-
-    if (difference.inMinutes < 60) {
-      final minutes = difference.inMinutes;
-
-      return minutes == 1 ? '1 minute ago' : '$minutes minutes ago';
-    }
-
-    if (difference.inHours < 24) {
-      final hours = difference.inHours;
-
-      return hours == 1 ? '1 hour ago' : '$hours hours ago';
-    }
-
-    final today = DateTime(now.year, now.month, now.day);
-    final notificationDay = DateTime(date.year, date.month, date.day);
-
-    final calendarDays = today.difference(notificationDay).inDays;
-
-    if (calendarDays == 1) {
-      return 'Yesterday';
-    }
-
-    if (calendarDays < 7) {
-      return '$calendarDays days ago';
-    }
-
-    if (calendarDays < 30) {
-      final weeks = calendarDays ~/ 7;
-
-      return weeks == 1 ? '1 week ago' : '$weeks weeks ago';
-    }
-
-    if (calendarDays < 365) {
-      final months = calendarDays ~/ 30;
-
-      return months == 1 ? '1 month ago' : '$months months ago';
-    }
-
-    final years = calendarDays ~/ 365;
-
-    return years == 1 ? '1 year ago' : '$years years ago';
   }
 
   // Mark one notification as read.
@@ -276,17 +236,16 @@ class _NotificationPageState extends State<NotificationPage>
 
       final response = await http.post(
         uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
+        headers: AuthSession.headers(
+          extra: {'Content-Type': 'application/json'},
+        ),
         body: jsonEncode({'userID': widget.userID, 'type': type, 'id': id}),
       );
 
       final result = jsonDecode(response.body);
 
       if (response.statusCode != 200 || result['success'] != true) {
-        throw Exception(result['message'] ?? 'Failed to mark as read.');
+        throw Exception(FriendlyErrors.fromResponse(response));
       }
 
       if (!mounted) return;
@@ -303,8 +262,12 @@ class _NotificationPageState extends State<NotificationPage>
     } catch (e) {
       if (!mounted) return;
 
+      debugPrint('[NOTIFICATIONS] Mark as read failed: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update notification: $e')),
+        SnackBar(
+          content: Text(FriendlyErrors.fromException(e)),
+          backgroundColor: AppColors.danger,
+        ),
       );
     }
   }
@@ -324,17 +287,16 @@ class _NotificationPageState extends State<NotificationPage>
 
       final response = await http.post(
         uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
+        headers: AuthSession.headers(
+          extra: {'Content-Type': 'application/json'},
+        ),
         body: jsonEncode({'userID': widget.userID, 'scope': selectedTab}),
       );
 
       final result = jsonDecode(response.body);
 
       if (response.statusCode != 200 || result['success'] != true) {
-        throw Exception(result['message'] ?? 'Failed to mark all as read.');
+        throw Exception(FriendlyErrors.fromResponse(response));
       }
 
       if (!mounted) return;
@@ -357,8 +319,12 @@ class _NotificationPageState extends State<NotificationPage>
         isMarkingAll = false;
       });
 
+      debugPrint('[NOTIFICATIONS] Mark all failed: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not mark notifications as read: $e')),
+        SnackBar(
+          content: Text(FriendlyErrors.fromException(e)),
+          backgroundColor: AppColors.danger,
+        ),
       );
     }
   }
@@ -678,7 +644,7 @@ class _NotificationPageState extends State<NotificationPage>
         borderRadius: BorderRadius.circular(AppRadius.lg),
         child: InkWell(
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          onTap: () => markAsRead(item),
+          onTap: () => _onNotificationTap(item),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(

@@ -8,6 +8,9 @@ import 'package:citisense/mascot.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_messaging/firebase_messaging.dart';
 
+import 'package:citisense/auth_session.dart';
+import 'package:citisense/createAccount.dart';
+import 'package:citisense/friendly_errors.dart';
 import 'package:citisense/home.dart';
 import 'package:citisense/forgot_password_page.dart';
 
@@ -167,10 +170,7 @@ class _LoginPageState extends State<LoginPage> {
           'FCM included: ${loginData.containsKey('fcmToken')}',
         );
 
-        throw TimeoutException(
-          'The login server did not respond within 20 seconds. '
-          'Check login.php and your Apache error log.',
-        );
+        throw TimeoutException('Login request timed out.');
       } finally {
         requestTimer.stop();
       }
@@ -180,7 +180,16 @@ class _LoginPageState extends State<LoginPage> {
       // --------------------------------------------------------
 
       if (response.statusCode != 200) {
-        throw Exception('Server returned status code ${response.statusCode}');
+        debugPrint('[LOGIN] Unexpected HTTP ${response.statusCode}');
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(FriendlyErrors.fromResponse(response)),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+        return;
       }
 
       // --------------------------------------------------------
@@ -207,8 +216,12 @@ class _LoginPageState extends State<LoginPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              decoded['message']?.toString() ?? 'Incorrect email or password.',
+              FriendlyErrors.fromMessage(
+                decoded['message']?.toString(),
+                fallback: FriendlyErrors.wrongLogin,
+              ),
             ),
+            backgroundColor: AppColors.danger,
           ),
         );
 
@@ -218,6 +231,9 @@ class _LoginPageState extends State<LoginPage> {
       // --------------------------------------------------------
       // GET USER DATA
       // --------------------------------------------------------
+
+      // Session token for messages, comments and notifications.
+      AuthSession.start(decoded['authToken']?.toString());
 
       final dynamic userData = decoded['user'];
 
@@ -298,6 +314,8 @@ class _LoginPageState extends State<LoginPage> {
       // OTHER ERRORS
       // --------------------------------------------------------
 
+      debugPrint('[LOGIN] Error: $e');
+
       if (!mounted) return;
 
       setState(() {
@@ -306,7 +324,7 @@ class _LoginPageState extends State<LoginPage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Something went wrong: ${e.toString()}'),
+          content: Text(FriendlyErrors.fromException(e)),
           backgroundColor: AppColors.danger,
         ),
       );
@@ -499,8 +517,9 @@ class _LoginPageState extends State<LoginPage> {
               // ------------------------------------------------
               // SIGN UP
               // ------------------------------------------------
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   const Text(
                     "Don't have an account? ",
@@ -511,9 +530,18 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                   GestureDetector(
-                    onTap: () {
-                      Navigator.pop(context);
-                    },
+                    onTap: _isLoading
+                        ? null
+                        : () {
+                            // Replace Log In with Create Account so going
+                            // back between them never stacks pages.
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const CreateAccount(),
+                              ),
+                            );
+                          },
                     child: const Text('Sign Up', style: AppText.link),
                   ),
                 ],
