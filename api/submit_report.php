@@ -485,7 +485,7 @@ try {
 
     $historyID = generateNextID(
         $conn,
-        "reportHistory",
+        "reporthistory",
         "historyID",
         "HIS"
     );
@@ -761,7 +761,7 @@ try {
     $remarks = "Report submitted";
 
     $stmt = $conn->prepare("
-        INSERT INTO reportHistory (
+        INSERT INTO reporthistory (
             historyID,
             reportID,
             userID,
