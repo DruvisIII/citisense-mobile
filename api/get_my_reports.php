@@ -93,12 +93,12 @@ $sql = "
         SELECT
             reportID,
             MIN(imagesID) AS firstImageID
-        FROM reportimages
+        FROM reportimage
         GROUP BY reportID
     ) firstImage
         ON r.reportID = firstImage.reportID
 
-    LEFT JOIN reportimages ri
+    LEFT JOIN reportimage ri
         ON ri.imagesID = firstImage.firstImageID
 
     WHERE r.userID = ?

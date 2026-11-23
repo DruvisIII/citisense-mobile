@@ -478,14 +478,14 @@ try {
 
     $imagesID = generateNextID(
         $conn,
-        "reportimages",
+        "reportimage",
         "imagesID",
         "IMG"
     );
 
     $historyID = generateNextID(
         $conn,
-        "reporthistory",
+        "reportHistory",
         "historyID",
         "HIS"
     );
@@ -511,25 +511,11 @@ try {
     // CREATE UPLOAD DIRECTORY
     // --------------------------------------------------------
 
-    $uploadDirectory =
-        __DIR__ .
-        DIRECTORY_SEPARATOR .
-        ".." .
-        DIRECTORY_SEPARATOR .
-        "uploads" .
-        DIRECTORY_SEPARATOR .
-        "reports";
-
-    $uploadDirectory =
-        realpath(
-            __DIR__ .
-            DIRECTORY_SEPARATOR .
-            ".."
-        ) .
-        DIRECTORY_SEPARATOR .
-        "uploads" .
-        DIRECTORY_SEPARATOR .
-        "reports";
+    $uploadDirectory = __DIR__
+    . DIRECTORY_SEPARATOR
+    . "uploads"
+    . DIRECTORY_SEPARATOR
+    . "reports";
 
 
     if (!is_dir($uploadDirectory)) {
@@ -717,7 +703,7 @@ try {
     // ========================================================
 
     $stmt = $conn->prepare("
-        INSERT INTO reportimages (
+        INSERT INTO reportimage (
             imagesID,
             reportID,
             imagePath,
@@ -761,7 +747,7 @@ try {
     $remarks = "Report submitted";
 
     $stmt = $conn->prepare("
-        INSERT INTO reporthistory (
+        INSERT INTO reportHistory (
             historyID,
             reportID,
             userID,
