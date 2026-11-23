@@ -1,4 +1,3 @@
-
 <?php
 
 
@@ -155,20 +154,26 @@ if (!$insert->execute()) {
 $otpId = $conn->insert_id;
 $insert->close();
 
-// Load Gmail credentials from the shared configuration.
-require_once __DIR__ . '/email_secrets.php';
+// Send verification email.
+require_once __DIR__ . '/mailer.php';
 $secrets = citisense_load_secrets();
 
-if (
-    empty($secrets['gmail_address']) ||
-    empty($secrets['gmail_app_password'])
-) {
+function delete_registration_otp(mysqli $conn, int $otpId): void
+{
     $delete = $conn->prepare(
         "DELETE FROM registration_email_otps WHERE id = ?"
     );
-    $delete->bind_param('i', $otpId);
-    $delete->execute();
-    $delete->close();
+
+    if ($delete) {
+        $delete->bind_param('i', $otpId);
+        $delete->execute();
+        $delete->close();
+    }
+}
+
+if (!citisense_mail_configured($secrets)) {
+    error_log('CitiSense registration: no email provider configured.');
+    delete_registration_otp($conn, (int)$otpId);
 
     registration_otp_response(
         false,
@@ -177,85 +182,41 @@ if (
     );
 }
 
-$autoload = __DIR__ . '/vendor/autoload.php';
+$safeName = htmlspecialchars(
+    $firstName,
+    ENT_QUOTES,
+    'UTF-8'
+);
 
-if (!file_exists($autoload)) {
-    error_log('CitiSense registration: PHPMailer autoload file not found.');
+$htmlBody =
+    '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#24324a">'
+    . '<h2>Welcome to CitiSense!</h2>'
+    . '<p>Hello ' . $safeName . ',</p>'
+    . '<p>Use the verification code below to verify your email address:</p>'
+    . '<p style="font-size:30px;font-weight:bold;letter-spacing:7px">'
+    . $otp
+    . '</p>'
+    . '<p>This code expires in 5 minutes.</p>'
+    . '<p>If you did not request a CitiSense account, you can ignore this email.</p>'
+    . '<p>For your security, do not share this code with anyone.</p>'
+    . '</div>';
 
-    $delete = $conn->prepare(
-        "DELETE FROM registration_email_otps WHERE id = ?"
-    );
-    $delete->bind_param('i', $otpId);
-    $delete->execute();
-    $delete->close();
+$textBody =
+    "Your CitiSense email verification code is {$otp}. "
+    . "It expires in 5 minutes. Do not share this code.";
 
-    registration_otp_response(
-        false,
-        'Email service is unavailable.',
-        500
-    );
-}
+$sent = citisense_send_mail(
+    $email,
+    $firstName,
+    'Verify your CitiSense account',
+    $htmlBody,
+    $textBody,
+    $secrets
+);
 
-require_once $autoload;
-
-// Send verification email.
-try {
-    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
-
-    $mail->isSMTP();
-    $mail->Host = 'smtp.gmail.com';
-    $mail->SMTPAuth = true;
-    $mail->Username = (string)($secrets['gmail_address'] ?? '');
-    $mail->Password = (string)($secrets['gmail_app_password'] ?? '');
-    $mail->SMTPSecure =
-        PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-    $mail->Port = 587;
-    $mail->CharSet = 'UTF-8';
-
-    $mail->setFrom($mail->Username, 'CitiSense');
-    $mail->addAddress($email, $firstName);
-
-    $mail->isHTML(true);
-    $mail->Subject = 'Verify your CitiSense account';
-
-    $safeName = htmlspecialchars(
-        $firstName,
-        ENT_QUOTES,
-        'UTF-8'
-    );
-
-    $mail->Body =
-        '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#24324a">'
-        . '<h2>Welcome to CitiSense!</h2>'
-        . '<p>Hello ' . $safeName . ',</p>'
-        . '<p>Use the verification code below to verify your email address:</p>'
-        . '<p style="font-size:30px;font-weight:bold;letter-spacing:7px">'
-        . $otp
-        . '</p>'
-        . '<p>This code expires in 5 minutes.</p>'
-        . '<p>If you did not request a CitiSense account, you can ignore this email.</p>'
-        . '<p>For your security, do not share this code with anyone.</p>'
-        . '</div>';
-
-    $mail->AltBody =
-        "Your CitiSense email verification code is {$otp}. "
-        . "It expires in 5 minutes. Do not share this code.";
-
-    $mail->send();
-
-} catch (Throwable $e) {
-    error_log(
-        'CitiSense registration email error: ' . $e->getMessage()
-    );
-
+if (!$sent) {
     // Remove the OTP record if sending failed.
-    $delete = $conn->prepare(
-        "DELETE FROM registration_email_otps WHERE id = ?"
-    );
-
-    $delete->bind_param('i', $otpId);
-    $delete->execute();
-    $delete->close();
+    delete_registration_otp($conn, (int)$otpId);
 
     registration_otp_response(
         false,

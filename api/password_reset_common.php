@@ -7,13 +7,10 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/config.php';
 
-$secretsFile = __DIR__ . '/password_reset_secrets.php';
-if (!file_exists($secretsFile)) {
-    http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Password recovery is not configured on the server.']);
-    exit;
-}
-$resetSecrets = require $secretsFile;
+// Credentials come from Railway environment variables, or from the
+// optional local password_reset_secrets.php file when running on XAMPP.
+require_once __DIR__ . '/mailer.php';
+$resetSecrets = citisense_load_secrets();
 
 function reset_json(bool $success, string $message, array $extra = [], int $status = 200): void
 {
@@ -31,43 +28,24 @@ function reset_require_post(): void
 
 function reset_send_email(string $to, string $firstName, string $otp, array $secrets): bool
 {
-    $autoload = __DIR__ . '/vendor/autoload.php';
-    if (!file_exists($autoload)) {
-        error_log('CitiSense password reset: PHPMailer vendor/autoload.php not found.');
-        return false;
-    }
+    $safeName = htmlspecialchars($firstName, ENT_QUOTES, 'UTF-8');
+    $htmlBody = '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#24324a">'
+        . '<h2>CitiSense password reset</h2>'
+        . '<p>Hello ' . $safeName . ',</p>'
+        . '<p>Use this verification code to reset your CitiSense password:</p>'
+        . '<p style="font-size:30px;font-weight:bold;letter-spacing:7px">' . $otp . '</p>'
+        . '<p>This code expires in 5 minutes. If you did not request a password reset, you can ignore this email.</p>'
+        . '<p>For your security, do not share this code with anyone.</p></div>';
+    $textBody = "Your CitiSense password reset code is {$otp}. It expires in 5 minutes. Do not share this code.";
 
-    require_once $autoload;
-
-    try {
-        $mail = new PHPMailer\PHPMailer\PHPMailer(true);
-        $mail->isSMTP();
-        $mail->Host = 'smtp.gmail.com';
-        $mail->SMTPAuth = true;
-        $mail->Username = (string)($secrets['gmail_address'] ?? '');
-        $mail->Password = (string)($secrets['gmail_app_password'] ?? '');
-        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port = 587;
-        $mail->CharSet = 'UTF-8';
-        $mail->setFrom($mail->Username, 'CitiSense');
-        $mail->addAddress($to, $firstName);
-        $mail->isHTML(true);
-        $mail->Subject = 'Your CitiSense password reset code';
-        $safeName = htmlspecialchars($firstName, ENT_QUOTES, 'UTF-8');
-        $mail->Body = '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#24324a">'
-            . '<h2>CitiSense password reset</h2>'
-            . '<p>Hello ' . $safeName . ',</p>'
-            . '<p>Use this verification code to reset your CitiSense password:</p>'
-            . '<p style="font-size:30px;font-weight:bold;letter-spacing:7px">' . $otp . '</p>'
-            . '<p>This code expires in 5 minutes. If you did not request a password reset, you can ignore this email.</p>'
-            . '<p>For your security, do not share this code with anyone.</p></div>';
-        $mail->AltBody = "Your CitiSense password reset code is {$otp}. It expires in 5 minutes. Do not share this code.";
-        $mail->send();
-        return true;
-    } catch (Throwable $e) {
-        error_log('CitiSense password reset email error: ' . $e->getMessage());
-        return false;
-    }
+    return citisense_send_mail(
+        $to,
+        $firstName,
+        'Your CitiSense password reset code',
+        $htmlBody,
+        $textBody,
+        $secrets
+    );
 }
 
 function reset_normalize_ph_mobile(string $raw): ?string

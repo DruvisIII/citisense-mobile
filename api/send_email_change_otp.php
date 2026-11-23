@@ -243,74 +243,47 @@ function delete_email_change_otp(mysqli $conn, int $otpId): void
     }
 }
 
-// Load Gmail credentials from the shared configuration.
-require_once __DIR__ . '/email_secrets.php';
+// Send the verification email to the NEW address.
+require_once __DIR__ . '/mailer.php';
 $secrets = citisense_load_secrets();
 
-if (
-    empty($secrets['gmail_address']) ||
-    empty($secrets['gmail_app_password'])
-) {
+if (!citisense_mail_configured($secrets)) {
+    error_log('CitiSense email change: no email provider configured.');
     delete_email_change_otp($conn, $otpId);
     email_change_response(false, 'Email service is not configured.', 500);
 }
 
-$autoload = __DIR__ . '/vendor/autoload.php';
+$safeName = htmlspecialchars($firstName, ENT_QUOTES, 'UTF-8');
 
-if (!file_exists($autoload)) {
-    error_log('CitiSense email change: PHPMailer autoload file not found.');
-    delete_email_change_otp($conn, $otpId);
-    email_change_response(false, 'Email service is unavailable.', 500);
-}
+$htmlBody =
+    '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#24324a">'
+    . '<h2>Confirm your new email</h2>'
+    . '<p>Hello ' . $safeName . ',</p>'
+    . '<p>You asked to change the email on your CitiSense account to this address. '
+    . 'Use the code below to confirm it:</p>'
+    . '<p style="font-size:30px;font-weight:bold;letter-spacing:7px">'
+    . $otp
+    . '</p>'
+    . '<p>This code expires in 5 minutes.</p>'
+    . '<p>If you did not request this change, you can ignore this email. '
+    . 'Your account email will stay the same.</p>'
+    . '<p>For your security, do not share this code with anyone.</p>'
+    . '</div>';
 
-require_once $autoload;
+$textBody =
+    "Your CitiSense email change code is {$otp}. "
+    . "It expires in 5 minutes. Do not share this code.";
 
-// Send the verification email to the NEW address.
-try {
-    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+$sent = citisense_send_mail(
+    $newEmail,
+    $firstName,
+    'Verify your new CitiSense email',
+    $htmlBody,
+    $textBody,
+    $secrets
+);
 
-    $mail->isSMTP();
-    $mail->Host = 'smtp.gmail.com';
-    $mail->SMTPAuth = true;
-    $mail->Username = (string)($secrets['gmail_address'] ?? '');
-    $mail->Password = (string)($secrets['gmail_app_password'] ?? '');
-    $mail->SMTPSecure =
-        PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-    $mail->Port = 587;
-    $mail->CharSet = 'UTF-8';
-
-    $mail->setFrom($mail->Username, 'CitiSense');
-    $mail->addAddress($newEmail, $firstName);
-
-    $mail->isHTML(true);
-    $mail->Subject = 'Verify your new CitiSense email';
-
-    $safeName = htmlspecialchars($firstName, ENT_QUOTES, 'UTF-8');
-
-    $mail->Body =
-        '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#24324a">'
-        . '<h2>Confirm your new email</h2>'
-        . '<p>Hello ' . $safeName . ',</p>'
-        . '<p>You asked to change the email on your CitiSense account to this address. '
-        . 'Use the code below to confirm it:</p>'
-        . '<p style="font-size:30px;font-weight:bold;letter-spacing:7px">'
-        . $otp
-        . '</p>'
-        . '<p>This code expires in 5 minutes.</p>'
-        . '<p>If you did not request this change, you can ignore this email. '
-        . 'Your account email will stay the same.</p>'
-        . '<p>For your security, do not share this code with anyone.</p>'
-        . '</div>';
-
-    $mail->AltBody =
-        "Your CitiSense email change code is {$otp}. "
-        . "It expires in 5 minutes. Do not share this code.";
-
-    $mail->send();
-
-} catch (Throwable $e) {
-    error_log('CitiSense email change email error: ' . $e->getMessage());
-
+if (!$sent) {
     delete_email_change_otp($conn, $otpId);
 
     email_change_response(

@@ -2,6 +2,10 @@
 
 A new Flutter project.
 
+## Railway email variables
+
+Railway blocks outbound SMTP on the Free, Trial and Hobby plans, so Gmail SMTP cannot deliver OTPs there. `api/mailer.php` sends through Brevo when `BREVO_API_KEY` is set (sender: `MAIL_FROM_EMAIL`, a verified Brevo sender; optional `MAIL_FROM_NAME`), and otherwise falls back to `GMAIL_ADDRESS` + `GMAIL_APP_PASSWORD` over SMTP.
+
 ## Roboflow image predictions
 
 The PHP backend exposes `POST /api/predict_roboflow.php` for image predictions with the published CitiSense Roboflow Workflow. It accepts a multipart form upload with the field name `image` (JPG, PNG, or WebP; maximum 8 MB). The response returns the workflow's output map under `outputs`; the current published workflow output is named `predictions`.

@@ -511,11 +511,22 @@ try {
     // CREATE UPLOAD DIRECTORY
     // --------------------------------------------------------
 
-    $uploadDirectory = __DIR__
-    . DIRECTORY_SEPARATOR
-    . "uploads"
-    . DIRECTORY_SEPARATOR
-    . "reports";
+    // XAMPP: images live in citisense/uploads (next to the api folder).
+    // Railway: the api folder is the web root, so keep them in
+    // api/uploads, which is served at <server>/uploads/... and matches
+    // imageBaseUrl in the app. UPLOAD_ROOT can override both.
+    $parentUploads = dirname(__DIR__) . DIRECTORY_SEPARATOR . "uploads";
+
+    $uploadRoot = getenv("UPLOAD_ROOT") ?: (
+        is_dir($parentUploads)
+            ? $parentUploads
+            : __DIR__ . DIRECTORY_SEPARATOR . "uploads"
+    );
+
+    $uploadDirectory =
+        rtrim($uploadRoot, "/\\") .
+        DIRECTORY_SEPARATOR .
+        "reports";
 
 
     if (!is_dir($uploadDirectory)) {
