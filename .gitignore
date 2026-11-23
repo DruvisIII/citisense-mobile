@@ -63,4 +63,3 @@ app.*.map.json
 /api/password_reset_secrets.php
 
 /api/vendor/
-/api/uploads/

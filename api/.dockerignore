@@ -1,8 +1,0 @@
-vendor/
-uploads/
-password_reset_secrets.php
-gemini_config.php
-test_api.php
-test_connection.php
-.env
-.env.*

@@ -2,26 +2,9 @@
 
 A new Flutter project.
 
-## Deploying the API on Railway
+## Railway email variables
 
-Set the Railway service's **Root Directory** to `api`. Railway then builds `api/Dockerfile`, which installs PHP 8.3 + Apache with `mysqli`, runs `composer install` (PHPMailer, google/auth), and raises PHP's upload limit to 20 MB so phone photos reach Roboflow and `submit_report.php`.
-
-Service variables:
-
-| Variable | Used for |
-| --- | --- |
-| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | MySQL connection |
-| `ROBOFLOW_API_KEY` | YOLOv11s image classification (`classify_image.php`) |
-| `BREVO_API_KEY` | OTP emails over HTTPS (recommended on Railway) |
-| `MAIL_FROM_EMAIL` | Sender address (must be a verified sender in Brevo) |
-| `MAIL_FROM_NAME` | Optional sender name, defaults to `CitiSense` |
-| `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD` | Gmail SMTP fallback (XAMPP or Railway Pro only) |
-| `RESEND_API_KEY` | Alternative to Brevo (needs a verified domain) |
-| `UPLOAD_ROOT` | Optional folder for report photos (e.g. a Railway volume) |
-
-Railway blocks outbound SMTP on the Free, Trial and Hobby plans, so Gmail SMTP alone will not deliver OTPs there. `api/mailer.php` uses Brevo or Resend when their key is set and falls back to SMTP otherwise.
-
-Report photos are saved in `api/uploads/reports`. Railway's disk is wiped on every deploy, so attach a volume mounted at `/var/www/html/uploads` to keep them.
+Railway blocks outbound SMTP on the Free, Trial and Hobby plans, so Gmail SMTP cannot deliver OTPs there. `api/mailer.php` sends through Brevo when `BREVO_API_KEY` is set (sender: `MAIL_FROM_EMAIL`, a verified Brevo sender; optional `MAIL_FROM_NAME`), and otherwise falls back to `GMAIL_ADDRESS` + `GMAIL_APP_PASSWORD` over SMTP.
 
 ## Roboflow image predictions
 
