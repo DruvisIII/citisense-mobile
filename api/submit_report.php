@@ -478,14 +478,14 @@ try {
 
     $imagesID = generateNextID(
         $conn,
-        "reportimage",
+        "reportimages",
         "imagesID",
         "IMG"
     );
 
     $historyID = generateNextID(
         $conn,
-        "reportHistory",
+        "reporthistory",
         "historyID",
         "HIS"
     );
@@ -703,7 +703,7 @@ try {
     // ========================================================
 
     $stmt = $conn->prepare("
-        INSERT INTO reportimage (
+        INSERT INTO reportimages (
             imagesID,
             reportID,
             imagePath,
@@ -747,7 +747,7 @@ try {
     $remarks = "Report submitted";
 
     $stmt = $conn->prepare("
-        INSERT INTO reportHistory (
+        INSERT INTO reporthistory (
             historyID,
             reportID,
             userID,
