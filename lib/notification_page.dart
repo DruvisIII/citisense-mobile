@@ -734,19 +734,19 @@ class _NotificationPageState extends State<NotificationPage>
                             color: iconBackground,
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Text(
-                            resolved
-                                ? 'Resolved'
-                                : inProgress
-                                ? 'In Progress'
-                                : 'Pending',
-                            style: TextStyle(
-                              color: accent,
-                              fontSize: 11,
-                              fontFamily: appFontFamily,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                          // child: Text(
+                          //   resolved
+                          //       ? 'Resolved'
+                          //       : inProgress
+                          //       ? 'In Progress'
+                          //       : 'Pending',
+                          //   style: TextStyle(
+                          //     color: accent,
+                          //     fontSize: 11,
+                          //     fontFamily: appFontFamily,
+                          //     fontWeight: FontWeight.w700,
+                          //   ),
+                          // ),
                         ),
                       ],
                     ],
