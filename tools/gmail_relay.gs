@@ -21,7 +21,10 @@ function doPost(e) {
   }
 
   try {
-    GmailApp.sendEmail(data.to, data.subject, data.text || '', {
+    MailApp.sendEmail({
+      to: data.to,
+      subject: data.subject,
+      body: data.text || '',
       htmlBody: data.html || '',
       name: data.name || 'CitiSense'
     });
@@ -37,7 +40,8 @@ function reply(success, message) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// Run this once from the editor to grant Gmail permission.
+// Run this once from the editor to grant the "send email" permission.
+// It shows how many emails you can still send today in the log.
 function authorize() {
-  GmailApp.getAliases();
+  Logger.log('Emails left today: ' + MailApp.getRemainingDailyQuota());
 }
