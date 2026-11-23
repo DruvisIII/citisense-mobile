@@ -43,11 +43,17 @@ if (!hash_equals($secret, $given)) {
 }
 
 set_time_limit(120);
+
+set_exception_handler(function (Throwable $e): void {
+    error_log('CitiSense push dispatch error: ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Dispatch error: ' . $e->getMessage()]);
+});
 ignore_user_abort(true);
 
 // Only push recent items, so a long outage doesn't send stale news.
 const DISPATCH_MAX_AGE_HOURS = 24;
-const DISPATCH_BATCH = 50;
+const DISPATCH_BATCH = 500;
 
 // ------------------------------------------------------------
 // Log table (created once)
@@ -80,6 +86,16 @@ if ($logCount === 0) {
  */
 function dispatch_claim(mysqli $conn, string $kind, string $itemID): bool
 {
+    $check = $conn->prepare('SELECT 1 FROM push_sent_log WHERE kind = ? AND itemID = ? LIMIT 1');
+    $check->bind_param('ss', $kind, $itemID);
+    $check->execute();
+    $alreadySent = $check->get_result()->num_rows > 0;
+    $check->close();
+
+    if ($alreadySent) {
+        return false;
+    }
+
     $stmt = $conn->prepare('INSERT IGNORE INTO push_sent_log (kind, itemID) VALUES (?, ?)');
     $stmt->bind_param('ss', $kind, $itemID);
     $stmt->execute();
@@ -124,14 +140,14 @@ $summary = ['reports' => 0, 'announcements' => 0, 'pushesSent' => 0];
 // ------------------------------------------------------------
 // 1. Report updates -> the report owner's phones
 // ------------------------------------------------------------
+// Recent rows only; whether each was already pushed is checked in PHP
+// (dispatch_claim), because joining push_sent_log to tables imported
+// with another text collation fails with "Illegal mix of collations".
 $stmt = $conn->prepare(
-    "SELECT n.notifID, n.userID, n.reportID, n.message
-     FROM notification n
-     LEFT JOIN push_sent_log p
-        ON p.kind = 'report' AND p.itemID = n.notifID
-     WHERE p.itemID IS NULL
-       AND n.dateSent >= NOW() - INTERVAL " . DISPATCH_MAX_AGE_HOURS . " HOUR
-     ORDER BY n.dateSent ASC
+    "SELECT notifID, userID, reportID, message
+     FROM notification
+     WHERE dateSent >= NOW() - INTERVAL " . DISPATCH_MAX_AGE_HOURS . " HOUR
+     ORDER BY dateSent ASC
      LIMIT " . DISPATCH_BATCH
 );
 $stmt->execute();
@@ -165,13 +181,10 @@ foreach ($pendingReports as $row) {
 // 2. Announcements -> every resident of that barangay
 // ------------------------------------------------------------
 $stmt = $conn->prepare(
-    "SELECT a.announceID, a.barangayID, a.title, a.content
-     FROM announcements a
-     LEFT JOIN push_sent_log p
-        ON p.kind = 'announcement' AND p.itemID = a.announceID
-     WHERE p.itemID IS NULL
-       AND a.datePosted >= NOW() - INTERVAL " . DISPATCH_MAX_AGE_HOURS . " HOUR
-     ORDER BY a.datePosted ASC
+    "SELECT announceID, barangayID, title, content
+     FROM announcements
+     WHERE datePosted >= NOW() - INTERVAL " . DISPATCH_MAX_AGE_HOURS . " HOUR
+     ORDER BY datePosted ASC
      LIMIT " . DISPATCH_BATCH
 );
 $stmt->execute();
@@ -185,15 +198,24 @@ foreach ($pendingAnnouncements as $row) {
     }
 
     $barangayID = (string) $row['barangayID'];
-    $devices = $conn->prepare(
-        'SELECT t.userID, t.fcmToken
-         FROM user_device_tokens t
-         JOIN users u ON u.userID = t.userID
-         WHERE u.barangayID = ?'
-    );
-    $devices->bind_param('s', $barangayID);
-    $devices->execute();
-    $list = $devices->get_result()->fetch_all(MYSQLI_ASSOC);
+    // Residents of the barangay, then their phones (two simple lookups,
+    // so differing table collations can't break a join).
+    $residents = $conn->prepare('SELECT userID FROM users WHERE barangayID = ?');
+    $residents->bind_param('s', $barangayID);
+    $residents->execute();
+    $userIDs = array_column($residents->get_result()->fetch_all(MYSQLI_ASSOC), 'userID');
+    $residents->close();
+
+    $list = [];
+    $devices = $conn->prepare('SELECT userID, fcmToken FROM user_device_tokens WHERE userID = ?');
+    foreach ($userIDs as $residentID) {
+        $residentID = (string) $residentID;
+        $devices->bind_param('s', $residentID);
+        $devices->execute();
+        foreach ($devices->get_result()->fetch_all(MYSQLI_ASSOC) as $device) {
+            $list[] = $device;
+        }
+    }
     $devices->close();
 
     $summary['announcements']++;
