@@ -1,7 +1,9 @@
 import 'dart:convert';
+
 import 'package:citisense/api_config.dart';
 
 import 'package:flutter/material.dart';
+import 'package:citisense/announcement_details_page.dart';
 import 'package:citisense/app_theme.dart';
 import 'package:citisense/live_updates.dart';
 import 'package:citisense/mascot.dart';
@@ -875,98 +877,202 @@ class _HomePageState extends State<HomePage> {
     final title = announcement['title']?.toString().trim() ?? '';
     final content = announcement['content']?.toString().trim() ?? '';
     final date = _parseAnnouncementDate(announcement['datePosted']);
-    // Use an announcement image when the API supplies one; otherwise show an icon.
-    final imageUrl =
-        (announcement['imageUrl'] ??
-                announcement['image'] ??
-                announcement['image_url'] ??
-                '')
-            .toString()
-            .trim();
+    final images = announcementImages(announcement);
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         boxShadow: AppShadows.card,
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: _buildAnnouncementImage(imageUrl),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => _openAnnouncement(announcement),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title.isNotEmpty ? title.toUpperCase() : 'ANNOUNCEMENT',
-                  style: const TextStyle(
-                    fontFamily: appFontFamily,
-                    fontSize: 15,
-                    height: 1.22,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primary,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: _buildAnnouncementImage(''),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title.isNotEmpty
+                                ? title.toUpperCase()
+                                : 'ANNOUNCEMENT',
+                            style: const TextStyle(
+                              fontFamily: appFontFamily,
+                              fontSize: 15,
+                              height: 1.22,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          if (date != null) ...[
+                            const SizedBox(height: 9),
+                            Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 7,
+                              runSpacing: 5,
+                              children: [
+                                const Icon(
+                                  Icons.calendar_month_outlined,
+                                  size: 16,
+                                  color: textGrey,
+                                ),
+                                Text(
+                                  _formatDate(date),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: textGrey,
+                                    fontFamily: appFontFamily,
+                                  ),
+                                ),
+                                const Text(
+                                  '·',
+                                  style: TextStyle(color: textGrey),
+                                ),
+                                const Icon(
+                                  Icons.access_time_outlined,
+                                  size: 16,
+                                  color: textGrey,
+                                ),
+                                Text(
+                                  _formatTime(date),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: textGrey,
+                                    fontFamily: appFontFamily,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          Text(
+                            content.isNotEmpty
+                                ? content
+                                : 'No announcement details available.',
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              height: 1.5,
+                              color: darkBlue,
+                              fontFamily: appFontFamily,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                if (date != null) ...[
-                  const SizedBox(height: 9),
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 7,
-                    runSpacing: 5,
-                    children: [
-                      const Icon(
-                        Icons.calendar_month_outlined,
-                        size: 16,
-                        color: textGrey,
-                      ),
-                      Text(
-                        _formatDate(date),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: textGrey,
-                          fontFamily: appFontFamily,
-                        ),
-                      ),
-                      const Text('·', style: TextStyle(color: textGrey)),
-                      const Icon(
-                        Icons.access_time_outlined,
-                        size: 16,
-                        color: textGrey,
-                      ),
-                      Text(
-                        _formatTime(date),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: textGrey,
-                          fontFamily: appFontFamily,
-                        ),
-                      ),
-                    ],
-                  ),
+                if (images.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  _buildAnnouncementPreview(images),
                 ],
-                const SizedBox(height: 8),
-                Text(
-                  content.isNotEmpty
-                      ? content
-                      : 'No announcement details available.',
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    height: 1.5,
-                    color: darkBlue,
-                    fontFamily: appFontFamily,
+                const SizedBox(height: 10),
+                const Align(
+                  alignment: Alignment.centerRight,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View details',
+                        style: TextStyle(
+                          fontFamily: appFontFamily,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: primaryBlue,
+                        ),
+                      ),
+                      SizedBox(width: 2),
+                      Icon(Icons.chevron_right, size: 18, color: primaryBlue),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // OPEN ANNOUNCEMENT DETAILS
+  // ============================================================
+
+  void _openAnnouncement(Map<String, dynamic> announcement) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AnnouncementDetailsPage(announcement: announcement),
+      ),
+    );
+  }
+
+  // ============================================================
+  // ANNOUNCEMENT PICTURE PREVIEW (first picture, "+N" for more)
+  // ============================================================
+
+  Widget _buildAnnouncementPreview(List<String> images) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            AnnouncementNetworkImage(url: images.first),
+            if (images.length > 1)
+              Positioned(
+                right: 10,
+                bottom: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.photo_library_outlined,
+                        size: 14,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        '+${images.length - 1}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
