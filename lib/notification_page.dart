@@ -612,11 +612,21 @@ class _NotificationPageState extends State<NotificationPage>
     final message = item['message']?.toString() ?? '';
     final timestamp = formatRelativeTime(item['timestamp']?.toString());
 
-    final lower = title.toLowerCase();
+    // The server sends the status this update is about ("In Progress",
+    // "Resolved", ...). Older servers didn't, so fall back to the text.
+    final String status =
+        (item['status']?.toString().trim().isNotEmpty ?? false)
+        ? item['status'].toString().trim()
+        : _statusFromText('$title $message');
+    final lower = status.toLowerCase();
 
     final resolved = lower.contains('resolved') || lower.contains('complete');
-
     final inProgress = lower.contains('progress') || lower.contains('review');
+    final problem =
+        lower.contains('reject') ||
+        lower.contains('overdue') ||
+        lower.contains('not accepted');
+    final isMessage = lower.contains('message');
 
     final Color accent = isAnnouncement
         ? AppColors.warning
@@ -624,6 +634,10 @@ class _NotificationPageState extends State<NotificationPage>
         ? AppColors.success
         : inProgress
         ? AppColors.primary
+        : problem
+        ? AppColors.danger
+        : isMessage
+        ? AppColors.accent
         : AppColors.warning;
 
     final Color iconBackground = isAnnouncement
@@ -632,6 +646,10 @@ class _NotificationPageState extends State<NotificationPage>
         ? AppColors.successSoft
         : inProgress
         ? AppColors.primarySoft
+        : problem
+        ? AppColors.dangerSoft
+        : isMessage
+        ? AppColors.accentSoft
         : AppColors.warningSoft;
 
     final IconData leadingIcon = isAnnouncement
@@ -640,6 +658,10 @@ class _NotificationPageState extends State<NotificationPage>
         ? Icons.check_circle_rounded
         : inProgress
         ? Icons.assignment_turned_in_outlined
+        : problem
+        ? Icons.error_outline_rounded
+        : isMessage
+        ? Icons.forum_rounded
         : Icons.chat_bubble_rounded;
 
     return Container(
@@ -735,11 +757,7 @@ class _NotificationPageState extends State<NotificationPage>
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            resolved
-                                ? 'Resolved'
-                                : inProgress
-                                ? 'In Progress'
-                                : 'Pending',
+                            status,
                             style: TextStyle(
                               color: accent,
                               fontSize: 11,
@@ -758,5 +776,22 @@ class _NotificationPageState extends State<NotificationPage>
         ),
       ),
     );
+  }
+
+  /// Best guess at the status from the notification text.
+  String _statusFromText(String text) {
+    final lower = text.toLowerCase();
+    if (lower.contains('not accepted') || lower.contains('reject')) {
+      return 'Rejected';
+    }
+    if (lower.contains('overdue')) return 'Overdue';
+    if (lower.contains('resolved') || lower.contains('complete')) {
+      return 'Resolved';
+    }
+    if (lower.contains('in progress')) return 'In Progress';
+    if (lower.contains('replied') || lower.contains('new message')) {
+      return 'New Message';
+    }
+    return 'Pending';
   }
 }

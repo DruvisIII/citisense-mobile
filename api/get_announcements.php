@@ -71,8 +71,70 @@ try {
             "barangayName" => $row["barangayName"],
             "title" => $row["title"],
             "content" => $row["content"],
-            "datePosted" => $row["datePosted"]
+            "datePosted" => $row["datePosted"],
+            "images" => []
         ];
+    }
+
+    $stmt->close();
+
+    /*
+     * Pictures the admin attached (announcement_images table).
+     * The admin website saves them, so their web address starts with
+     * the admin site's address: ANNOUNCEMENT_MEDIA_BASE_URL, e.g.
+     * https://citisense-admin.up.railway.app/
+     */
+    if ($announcements) {
+        $mediaBase = trim((string) getenv("ANNOUNCEMENT_MEDIA_BASE_URL"));
+        if ($mediaBase === "") {
+            $scheme = (!empty($_SERVER["HTTPS"]) && $_SERVER["HTTPS"] !== "off")
+                || (($_SERVER["HTTP_X_FORWARDED_PROTO"] ?? "") === "https") ? "https" : "http";
+            $mediaBase = $scheme . "://" . ($_SERVER["HTTP_HOST"] ?? "localhost") . "/";
+        }
+        $mediaBase = rtrim($mediaBase, "/") . "/";
+
+        $indexByID = [];
+        foreach ($announcements as $i => $announcement) {
+            $indexByID[(string) $announcement["announceID"]] = $i;
+        }
+
+        try {
+            $marks = implode(",", array_fill(0, count($indexByID), "?"));
+            $imageStmt = $conn->prepare(
+                "SELECT announceID, imagePath
+                 FROM announcement_images
+                 WHERE announceID IN ($marks)
+                 ORDER BY sortOrder ASC, imageID ASC"
+            );
+
+            if ($imageStmt) {
+                $ids = array_map("strval", array_keys($indexByID));
+                $imageStmt->bind_param(str_repeat("s", count($ids)), ...$ids);
+                $imageStmt->execute();
+                $imageResult = $imageStmt->get_result();
+
+                while ($image = $imageResult->fetch_assoc()) {
+                    $path = trim((string) $image["imagePath"]);
+                    if ($path === "") {
+                        continue;
+                    }
+
+                    $url = preg_match('~^https?://~i', $path)
+                        ? $path
+                        : $mediaBase . implode("/", array_map("rawurlencode", explode("/", ltrim($path, "/"))));
+
+                    $i = $indexByID[(string) $image["announceID"]] ?? null;
+                    if ($i !== null) {
+                        $announcements[$i]["images"][] = $url;
+                    }
+                }
+
+                $imageStmt->close();
+            }
+        } catch (Throwable $imageError) {
+            // No announcement_images table yet: show announcements without pictures.
+            error_log("Announcement images unavailable: " . $imageError->getMessage());
+        }
     }
 
     echo json_encode([
@@ -80,8 +142,6 @@ try {
         "message" => "Announcements retrieved successfully.",
         "data" => $announcements
     ]);
-
-    $stmt->close();
 
 } catch (Exception $e) {
 

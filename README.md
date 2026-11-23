@@ -21,7 +21,19 @@ Railway blocks outbound SMTP on the Free, Trial and Hobby plans, so Gmail SMTP c
 
 Free Gmail accounts can send about 100 emails a day this way. If you edit the script later, deploy a new version (Deploy → Manage deployments → Edit → New version) so the URL keeps working.
 
-## Roboflow image predictions
+## Push notifications and announcement pictures (Railway)
+
+API service variables:
+
+| Variable | Used for |
+| --- | --- |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | Whole Firebase service-account JSON file (raw or base64) for sending pushes |
+| `PUSH_DISPATCH_SECRET` | Long random value that protects `push_dispatch.php` |
+| `ANNOUNCEMENT_MEDIA_BASE_URL` | Admin website address, e.g. `https://<admin>.up.railway.app/`, where announcement pictures are served |
+
+The admin panel saves report updates (`notification`) and announcements (`announcements`) without sending pushes. `push_dispatch.php?key=<PUSH_DISPATCH_SECRET>` sends a push for each new one, once, and records it in `push_sent_log`. Call it after the admin saves something, or on a schedule.
+
+
 
 The PHP backend exposes `POST /api/predict_roboflow.php` for image predictions with the published CitiSense Roboflow Workflow. It accepts a multipart form upload with the field name `image` (JPG, PNG, or WebP; maximum 8 MB). The response returns the workflow's output map under `outputs`; the current published workflow output is named `predictions`.
 
