@@ -1,4 +1,3 @@
-
 <?php
 require_once __DIR__ . '/password_reset_common.php';
 reset_require_post();
