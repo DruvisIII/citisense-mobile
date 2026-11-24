@@ -400,7 +400,7 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
             fontSize: 16,
             fontWeight: FontWeight.w800,
             color: AppColors.ink,
-            fontFamily: appFontFamily,
+            fontFamily: appHeadingFontFamily,
           ),
         ),
         const SizedBox(height: 2),
@@ -485,7 +485,7 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
               Text(
                 _ratingLabel(fb.rating),
                 style: const TextStyle(
-                  fontFamily: appFontFamily,
+                  fontFamily: appHeadingFontFamily,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: AppColors.ink,
@@ -589,7 +589,7 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
               Text(
                 _ratingLabel(_rating),
                 style: const TextStyle(
-                  fontFamily: appFontFamily,
+                  fontFamily: appHeadingFontFamily,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: AppColors.textSecondary,
@@ -702,7 +702,7 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
                   label,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontFamily: appFontFamily,
+                    fontFamily: appHeadingFontFamily,
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: selected ? color : AppColors.ink,
@@ -731,7 +731,7 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
           Text(
             text,
             style: TextStyle(
-              fontFamily: appFontFamily,
+              fontFamily: appHeadingFontFamily,
               fontSize: 12,
               fontWeight: FontWeight.w800,
               color: color,
@@ -893,7 +893,7 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
               Text(
                 mine ? 'You' : 'Barangay',
                 style: TextStyle(
-                  fontFamily: appFontFamily,
+                  fontFamily: appHeadingFontFamily,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   color: mine ? AppColors.textSecondary : AppColors.primary,

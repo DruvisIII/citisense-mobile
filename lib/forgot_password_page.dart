@@ -365,7 +365,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
             keyboardType: TextInputType.number,
             maxLength: 6,
             style: const TextStyle(
-              fontFamily: appFontFamily,
+              fontFamily: appHeadingFontFamily,
               fontSize: 18,
               letterSpacing: 6,
               fontWeight: FontWeight.w700,
@@ -534,7 +534,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
               Text(
                 'Step ${_step + 1} of 3',
                 style: const TextStyle(
-                  fontFamily: appFontFamily,
+                  fontFamily: appHeadingFontFamily,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: AppColors.primary,

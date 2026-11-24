@@ -368,7 +368,7 @@ class _NotificationPageState extends State<NotificationPage>
                     maxLines: 1,
                     softWrap: false,
                     style: const TextStyle(
-                      fontFamily: appFontFamily,
+                      fontFamily: appHeadingFontFamily,
                       fontSize: 37,
                       fontWeight: FontWeight.w800,
                       height: 1.15,
@@ -445,7 +445,7 @@ class _NotificationPageState extends State<NotificationPage>
                       style: TextButton.styleFrom(
                         foregroundColor: AppColors.primary,
                         textStyle: const TextStyle(
-                          fontFamily: appFontFamily,
+                          fontFamily: appHeadingFontFamily,
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
@@ -479,7 +479,7 @@ class _NotificationPageState extends State<NotificationPage>
             maxLines: 1,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontFamily: appFontFamily,
+              fontFamily: appHeadingFontFamily,
               fontSize: 13,
               fontWeight: FontWeight.w700,
               color: selected ? Colors.white : textGrey,
@@ -539,7 +539,7 @@ class _NotificationPageState extends State<NotificationPage>
                   : 'No notifications yet',
               textAlign: TextAlign.center,
               style: const TextStyle(
-                fontFamily: appFontFamily,
+                fontFamily: appHeadingFontFamily,
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: darkBlue,
@@ -672,7 +672,7 @@ class _NotificationPageState extends State<NotificationPage>
                               title,
                               style: const TextStyle(
                                 color: AppColors.ink,
-                                fontFamily: appFontFamily,
+                                fontFamily: appHeadingFontFamily,
                                 fontWeight: FontWeight.w800,
                                 fontSize: 16,
                               ),
@@ -727,7 +727,7 @@ class _NotificationPageState extends State<NotificationPage>
                             style: TextStyle(
                               color: accent,
                               fontSize: 11,
-                              fontFamily: appFontFamily,
+                              fontFamily: appHeadingFontFamily,
                               fontWeight: FontWeight.w700,
                             ),
                           ),

@@ -52,7 +52,7 @@ class LandingPage extends StatelessWidget {
                         fontSize: 30,
                         fontWeight: FontWeight.w800,
                         color: AppColors.primary,
-                        fontFamily: appFontFamily,
+                        fontFamily: appHeadingFontFamily,
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -86,7 +86,7 @@ class LandingPage extends StatelessWidget {
                         height: 1.2,
                         fontWeight: FontWeight.w800,
                         color: AppColors.ink,
-                        fontFamily: appFontFamily,
+                        fontFamily: appHeadingFontFamily,
                       ),
                     ),
 

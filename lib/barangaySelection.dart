@@ -297,7 +297,7 @@ class _BarangaySelectionState extends State<BarangaySelection> {
                               barangayName,
                               style: const TextStyle(
                                 fontSize: 16,
-                                fontFamily: appFontFamily,
+                                fontFamily: appHeadingFontFamily,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.ink,
                               ),

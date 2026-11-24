@@ -159,7 +159,7 @@ class _EmailVerificationState extends State<EmailVerification> {
                 widget.email,
                 style: const TextStyle(
                   fontSize: 15,
-                  fontFamily: appFontFamily,
+                  fontFamily: appHeadingFontFamily,
                   fontWeight: FontWeight.w700,
                   color: AppColors.primary,
                 ),
@@ -174,7 +174,7 @@ class _EmailVerificationState extends State<EmailVerification> {
                 textAlign: TextAlign.center,
                 onSubmitted: (_) => _verifyOTP(),
                 style: const TextStyle(
-                  fontFamily: appFontFamily,
+                  fontFamily: appHeadingFontFamily,
                   fontSize: 20,
                   letterSpacing: 8,
                   fontWeight: FontWeight.w700,

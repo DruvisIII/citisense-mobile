@@ -175,7 +175,7 @@ class _AnnouncementDetailsPageState extends State<AnnouncementDetailsPage> {
         title: const Text(
           'Announcement',
           style: TextStyle(
-            fontFamily: appFontFamily,
+            fontFamily: appHeadingFontFamily,
             fontWeight: FontWeight.w800,
             fontSize: 18,
             color: AppColors.ink,
@@ -285,7 +285,7 @@ class _AnnouncementDetailsPageState extends State<AnnouncementDetailsPage> {
                       child: Text(
                         'Barangay $barangayName',
                         style: const TextStyle(
-                          fontFamily: appFontFamily,
+                          fontFamily: appHeadingFontFamily,
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: AppColors.primary,
@@ -295,7 +295,7 @@ class _AnnouncementDetailsPageState extends State<AnnouncementDetailsPage> {
                   Text(
                     title.isNotEmpty ? title : 'Announcement',
                     style: const TextStyle(
-                      fontFamily: appFontFamily,
+                      fontFamily: appHeadingFontFamily,
                       fontSize: 20,
                       height: 1.25,
                       fontWeight: FontWeight.w800,
@@ -633,7 +633,7 @@ class _AnnouncementCommentsState extends State<AnnouncementComments> {
                       ? 'Comments'
                       : 'Comments (${_comments.length})',
                   style: const TextStyle(
-                    fontFamily: appFontFamily,
+                    fontFamily: appHeadingFontFamily,
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: AppColors.ink,
@@ -733,7 +733,7 @@ class _AnnouncementCommentsState extends State<AnnouncementComments> {
                 : Text(
                     initial,
                     style: const TextStyle(
-                      fontFamily: appFontFamily,
+                      fontFamily: appHeadingFontFamily,
                       fontWeight: FontWeight.w800,
                       color: AppColors.ink,
                     ),
@@ -752,7 +752,7 @@ class _AnnouncementCommentsState extends State<AnnouncementComments> {
                     Text(
                       c.isMine ? '${c.name} (You)' : c.name,
                       style: TextStyle(
-                        fontFamily: appFontFamily,
+                        fontFamily: appHeadingFontFamily,
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
                         color: official ? AppColors.primary : AppColors.ink,
@@ -804,7 +804,7 @@ class _AnnouncementCommentsState extends State<AnnouncementComments> {
                           child: Text(
                             'Reply',
                             style: TextStyle(
-                              fontFamily: appFontFamily,
+                              fontFamily: appHeadingFontFamily,
                               fontSize: 11.5,
                               fontWeight: FontWeight.w700,
                               color: AppColors.primary,
@@ -833,7 +833,7 @@ class _AnnouncementCommentsState extends State<AnnouncementComments> {
       child: Text(
         label,
         style: TextStyle(
-          fontFamily: appFontFamily,
+          fontFamily: appHeadingFontFamily,
           fontSize: 10.5,
           fontWeight: FontWeight.w800,
           color: color,
@@ -859,7 +859,7 @@ class _AnnouncementCommentsState extends State<AnnouncementComments> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontFamily: appFontFamily,
+                      fontFamily: appHeadingFontFamily,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                       color: AppColors.primary,
