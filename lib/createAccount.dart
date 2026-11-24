@@ -432,7 +432,7 @@ class _CountryCodePrefix extends StatelessWidget {
           const Text(
             PhilippinePhone.countryCode,
             style: TextStyle(
-              fontFamily: appFontFamily,
+              fontFamily: appHeadingFontFamily,
               fontSize: 14,
               fontWeight: FontWeight.w700,
               color: AppColors.ink,

@@ -520,11 +520,11 @@ class _HomePageState extends State<HomePage> {
           unselectedFontSize: 12,
           selectedLabelStyle: const TextStyle(
             fontWeight: FontWeight.w700,
-            fontFamily: appFontFamily,
+            fontFamily: appHeadingFontFamily,
           ),
           unselectedLabelStyle: const TextStyle(
             fontWeight: FontWeight.w600,
-            fontFamily: appFontFamily,
+            fontFamily: appHeadingFontFamily,
           ),
           elevation: 0,
           items: const [
@@ -590,17 +590,17 @@ class _HomePageState extends State<HomePage> {
                               ? 'Barangay $_barangayName'
                               : 'Your Barangay',
                           style: const TextStyle(
-                            fontSize: 22,
+                            fontSize: 19,
                             fontWeight: FontWeight.w800,
                             color: darkBlue,
-                            fontFamily: appFontFamily,
+                            fontFamily: appHeadingFontFamily,
                           ),
                         ),
                         const SizedBox(height: 2),
                         const Text(
                           'Cebu City',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
                             color: textGrey,
                             fontFamily: appFontFamily,
                           ),
@@ -645,7 +645,7 @@ class _HomePageState extends State<HomePage> {
                                 height: 1.12,
                                 fontWeight: FontWeight.w900,
                                 color: darkBlue,
-                                fontFamily: appFontFamily,
+                                fontFamily: appHeadingFontFamily,
                               ),
                             ),
                           ),
@@ -733,7 +733,7 @@ class _HomePageState extends State<HomePage> {
                           const Text(
                             'Report an Issue',
                             style: TextStyle(
-                              fontFamily: appFontFamily,
+                              fontFamily: appHeadingFontFamily,
                               fontSize: 21,
                               fontWeight: FontWeight.w800,
                               color: Colors.white,
@@ -778,7 +778,7 @@ class _HomePageState extends State<HomePage> {
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
                             color: darkBlue,
-                            fontFamily: appFontFamily,
+                            fontFamily: appHeadingFontFamily,
                           ),
                         ),
                         const SizedBox(height: 3),
@@ -921,7 +921,7 @@ class _HomePageState extends State<HomePage> {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontFamily: appFontFamily,
+                              fontFamily: appHeadingFontFamily,
                               fontSize: 15.5,
                               height: 1.25,
                               fontWeight: FontWeight.w800,
@@ -1002,7 +1002,7 @@ class _HomePageState extends State<HomePage> {
                     const Text(
                       'View details',
                       style: TextStyle(
-                        fontFamily: appFontFamily,
+                        fontFamily: appHeadingFontFamily,
                         fontSize: 12.5,
                         fontWeight: FontWeight.w700,
                         color: primaryBlue,
@@ -1137,7 +1137,7 @@ class _HomePageState extends State<HomePage> {
                     Text(
                       'Message your barangay',
                       style: TextStyle(
-                        fontFamily: appFontFamily,
+                        fontFamily: appHeadingFontFamily,
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
                         color: darkBlue,
@@ -1222,7 +1222,7 @@ class _HomePageState extends State<HomePage> {
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
                 color: darkBlue,
-                fontFamily: appFontFamily,
+                fontFamily: appHeadingFontFamily,
               ),
             ),
 

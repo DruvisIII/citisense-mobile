@@ -235,7 +235,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     maxLines: 1,
                     softWrap: false,
                     style: const TextStyle(
-                      fontFamily: appFontFamily,
+                      fontFamily: appHeadingFontFamily,
                       fontSize: 37,
                       fontWeight: FontWeight.w800,
                       height: 1.15,
@@ -334,7 +334,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontFamily: appFontFamily,
+                    fontFamily: appHeadingFontFamily,
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                     color: darkBlue,
@@ -399,7 +399,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     Text(
                       'AI Insights',
                       style: TextStyle(
-                        fontFamily: appFontFamily,
+                        fontFamily: appHeadingFontFamily,
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
                         color: darkBlue,
@@ -452,7 +452,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       Text(
                         'Notifications',
                         style: TextStyle(
-                          fontFamily: appFontFamily,
+                          fontFamily: appHeadingFontFamily,
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
                           color: darkBlue,
@@ -511,7 +511,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     softWrap: false,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontFamily: appFontFamily,
+                      fontFamily: appHeadingFontFamily,
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
                       color: darkBlue,
@@ -587,7 +587,7 @@ class _SettingsPageState extends State<SettingsPage> {
               Text(
                 'Send App Feedback',
                 style: TextStyle(
-                  fontFamily: appFontFamily,
+                  fontFamily: appHeadingFontFamily,
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
                   color: darkBlue,
@@ -635,7 +635,7 @@ class _SettingsPageState extends State<SettingsPage> {
               Text(
                 'Change Password',
                 style: TextStyle(
-                  fontFamily: appFontFamily,
+                  fontFamily: appHeadingFontFamily,
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
                   color: darkBlue,
@@ -676,7 +676,7 @@ class _SettingsPageState extends State<SettingsPage> {
               Text(
                 'Log Out',
                 style: TextStyle(
-                  fontFamily: appFontFamily,
+                  fontFamily: appHeadingFontFamily,
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
                   color: AppColors.danger,
@@ -742,7 +742,7 @@ class _SettingsPageState extends State<SettingsPage> {
             fontSize: 12.5,
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
             color: isSelected ? darkBlue : textGrey,
-            fontFamily: appFontFamily,
+            fontFamily: appHeadingFontFamily,
           ),
         ),
       ),
@@ -760,7 +760,7 @@ class _SettingsPageState extends State<SettingsPage> {
               fontSize: 20,
               fontWeight: FontWeight.w700,
               color: darkBlue,
-              fontFamily: appFontFamily,
+              fontFamily: appHeadingFontFamily,
             ),
           ),
           content: const Text(
@@ -798,7 +798,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   color: AppColors.danger,
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  fontFamily: appFontFamily,
+                  fontFamily: appHeadingFontFamily,
                 ),
               ),
             ),
@@ -1010,7 +1010,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                       color: darkBlue,
-                      fontFamily: appFontFamily,
+                      fontFamily: appHeadingFontFamily,
                     ),
                   ),
                 ),
@@ -1060,7 +1060,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
                                   ? FontWeight.w700
                                   : FontWeight.w500,
                               color: darkBlue,
-                              fontFamily: appFontFamily,
+                              fontFamily: appHeadingFontFamily,
                             ),
                           ),
                           trailing: isSelected
@@ -1422,7 +1422,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
             fontSize: 15,
             fontWeight: FontWeight.w700,
             color: darkBlue,
-            fontFamily: appFontFamily,
+            fontFamily: appHeadingFontFamily,
           ),
           errorText: errorText,
           errorMaxLines: 2,
@@ -1542,7 +1542,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
             color: darkBlue,
             fontSize: 20,
             fontWeight: FontWeight.w700,
-            fontFamily: appFontFamily,
+            fontFamily: appHeadingFontFamily,
           ),
         ),
         centerTitle: true,
@@ -1560,7 +1560,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
                   color: primaryBlue,
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  fontFamily: appFontFamily,
+                  fontFamily: appHeadingFontFamily,
                 ),
               ),
             ),
@@ -1612,7 +1612,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
                   fontSize: 21,
                   fontWeight: FontWeight.w700,
                   color: darkBlue,
-                  fontFamily: appFontFamily,
+                  fontFamily: appHeadingFontFamily,
                 ),
               ),
 
@@ -1638,7 +1638,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: darkBlue,
-                    fontFamily: appFontFamily,
+                    fontFamily: appHeadingFontFamily,
                   ),
                 ),
               ),
@@ -1715,7 +1715,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
                               color: Colors.white,
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
-                              fontFamily: appFontFamily,
+                              fontFamily: appHeadingFontFamily,
                             ),
                           ),
                   ),
@@ -2018,7 +2018,7 @@ class _EmailChangeVerificationPageState
                   widget.newEmail,
                   style: const TextStyle(
                     fontSize: 15,
-                    fontFamily: appFontFamily,
+                    fontFamily: appHeadingFontFamily,
                     fontWeight: FontWeight.w700,
                     color: AppColors.primary,
                   ),
@@ -2034,7 +2034,7 @@ class _EmailChangeVerificationPageState
                   textAlign: TextAlign.center,
                   onSubmitted: (_) => _isVerifying ? null : _verify(),
                   style: const TextStyle(
-                    fontFamily: appFontFamily,
+                    fontFamily: appHeadingFontFamily,
                     fontSize: 20,
                     letterSpacing: 8,
                     fontWeight: FontWeight.w700,
@@ -2437,7 +2437,7 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
                 child: Text(
                   label,
                   style: TextStyle(
-                    fontFamily: appFontFamily,
+                    fontFamily: appHeadingFontFamily,
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: selected ? AppColors.primary : AppColors.ink,

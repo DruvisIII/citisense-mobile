@@ -191,7 +191,7 @@ class _BarangayMessagesPageState extends State<BarangayMessagesPage> {
             const Text(
               'Messages',
               style: TextStyle(
-                fontFamily: appFontFamily,
+                fontFamily: appHeadingFontFamily,
                 fontWeight: FontWeight.w800,
                 fontSize: 18,
                 color: AppColors.ink,
@@ -277,7 +277,7 @@ class _BarangayMessagesPageState extends State<BarangayMessagesPage> {
             'Start a conversation',
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontFamily: appFontFamily,
+              fontFamily: appHeadingFontFamily,
               fontSize: 18,
               fontWeight: FontWeight.w800,
               color: AppColors.ink,
@@ -353,7 +353,7 @@ class _BarangayMessagesPageState extends State<BarangayMessagesPage> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontFamily: appFontFamily,
+                            fontFamily: appHeadingFontFamily,
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
                             color: AppColors.primary,

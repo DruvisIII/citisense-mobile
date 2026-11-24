@@ -8,10 +8,14 @@ import 'package:flutter/material.dart';
 // everywhere.
 // ============================================================
 
-/// Font family used across the whole app.
-/// Plus Jakarta Sans: free from Google Fonts (SIL Open Font License).
+/// Body font used across the whole app (paragraphs, subtitles, hints,
+/// inputs). Quicksand: free from Google Fonts (SIL Open Font License).
 /// To switch fonts later, change this value and the pubspec.yaml entry.
-const String appFontFamily = 'PlusJakartaSans';
+const String appFontFamily = 'Quicksand';
+
+/// Heading font for titles, names, labels and other bold text.
+/// Nunito: free from Google Fonts (SIL Open Font License).
+const String appHeadingFontFamily = 'Nunito';
 
 class AppColors {
   AppColors._();
@@ -69,7 +73,7 @@ class AppText {
   AppText._();
 
   static const TextStyle pageTitle = TextStyle(
-    fontFamily: appFontFamily,
+    fontFamily: appHeadingFontFamily,
     fontSize: 28,
     height: 1.2,
     fontWeight: FontWeight.w800,
@@ -84,14 +88,14 @@ class AppText {
   );
 
   static const TextStyle fieldLabel = TextStyle(
-    fontFamily: appFontFamily,
+    fontFamily: appHeadingFontFamily,
     fontSize: 14,
     fontWeight: FontWeight.w700,
     color: AppColors.ink,
   );
 
   static const TextStyle sectionLabel = TextStyle(
-    fontFamily: appFontFamily,
+    fontFamily: appHeadingFontFamily,
     fontSize: 12,
     letterSpacing: 0.8,
     fontWeight: FontWeight.w800,
@@ -99,7 +103,7 @@ class AppText {
   );
 
   static const TextStyle link = TextStyle(
-    fontFamily: appFontFamily,
+    fontFamily: appHeadingFontFamily,
     fontSize: 14,
     fontWeight: FontWeight.w700,
     color: AppColors.primary,
@@ -133,6 +137,32 @@ class AppShadows {
 class AppTheme {
   AppTheme._();
 
+  // Headings (display / headline / title) use Nunito; body and label
+  // text use Quicksand.
+  static TextTheme _textTheme(TextTheme base) {
+    final body = base.apply(
+      fontFamily: appFontFamily,
+      bodyColor: AppColors.ink,
+      displayColor: AppColors.ink,
+    );
+    final heading = base.apply(
+      fontFamily: appHeadingFontFamily,
+      bodyColor: AppColors.ink,
+      displayColor: AppColors.ink,
+    );
+    return body.copyWith(
+      displayLarge: heading.displayLarge,
+      displayMedium: heading.displayMedium,
+      displaySmall: heading.displaySmall,
+      headlineLarge: heading.headlineLarge,
+      headlineMedium: heading.headlineMedium,
+      headlineSmall: heading.headlineSmall,
+      titleLarge: heading.titleLarge,
+      titleMedium: heading.titleMedium,
+      titleSmall: heading.titleSmall,
+    );
+  }
+
   static ThemeData get light {
     final colorScheme = ColorScheme.fromSeed(
       seedColor: AppColors.primary,
@@ -160,11 +190,7 @@ class AppTheme {
     );
 
     return base.copyWith(
-      textTheme: base.textTheme.apply(
-        fontFamily: appFontFamily,
-        bodyColor: AppColors.ink,
-        displayColor: AppColors.ink,
-      ),
+      textTheme: _textTheme(base.textTheme),
 
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.background,
@@ -174,7 +200,7 @@ class AppTheme {
         centerTitle: true,
         iconTheme: IconThemeData(color: AppColors.ink),
         titleTextStyle: TextStyle(
-          fontFamily: appFontFamily,
+          fontFamily: appHeadingFontFamily,
           fontSize: 20,
           fontWeight: FontWeight.w700,
           color: AppColors.ink,
@@ -195,7 +221,7 @@ class AppTheme {
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
           textStyle: const TextStyle(
-            fontFamily: appFontFamily,
+            fontFamily: appHeadingFontFamily,
             fontSize: 16,
             fontWeight: FontWeight.w700,
           ),
@@ -211,7 +237,7 @@ class AppTheme {
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
           textStyle: const TextStyle(
-            fontFamily: appFontFamily,
+            fontFamily: appHeadingFontFamily,
             fontSize: 16,
             fontWeight: FontWeight.w700,
           ),
@@ -314,7 +340,7 @@ class AppTheme {
           borderRadius: BorderRadius.circular(AppRadius.lg),
         ),
         titleTextStyle: const TextStyle(
-          fontFamily: appFontFamily,
+          fontFamily: appHeadingFontFamily,
           fontSize: 20,
           fontWeight: FontWeight.w700,
           color: AppColors.ink,

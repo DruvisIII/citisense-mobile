@@ -557,7 +557,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                           fontSize: 22,
                           fontWeight: FontWeight.w800,
                           color: AppColors.ink,
-                          fontFamily: appFontFamily,
+                          fontFamily: appHeadingFontFamily,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -609,7 +609,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                               height: 1.12,
                               fontWeight: FontWeight.w900,
                               color: AppColors.ink,
-                              fontFamily: appFontFamily,
+                              fontFamily: appHeadingFontFamily,
                             ),
                           ),
                         ),
@@ -679,7 +679,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                 Text(
                   'My Reports',
                   style: TextStyle(
-                    fontFamily: appFontFamily,
+                    fontFamily: appHeadingFontFamily,
                     color: darkBlue,
                     fontSize: 26,
                     fontWeight: FontWeight.w900,
@@ -740,7 +740,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
             maxLines: 1,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontFamily: appFontFamily,
+              fontFamily: appHeadingFontFamily,
               fontSize: 13,
               fontWeight: FontWeight.w700,
               color: selected ? Colors.white : textGrey,
@@ -881,7 +881,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontFamily: appFontFamily,
+                              fontFamily: appHeadingFontFamily,
                               color: categoryColor,
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
@@ -903,7 +903,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                           _getStatusText(report),
                           maxLines: 1,
                           style: TextStyle(
-                            fontFamily: appFontFamily,
+                            fontFamily: appHeadingFontFamily,
                             color: statusColor,
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
@@ -918,7 +918,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontFamily: appFontFamily,
+                      fontFamily: appHeadingFontFamily,
                       color: darkBlue,
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
@@ -977,7 +977,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                       Text(
                         'View Details',
                         style: TextStyle(
-                          fontFamily: appFontFamily,
+                          fontFamily: appHeadingFontFamily,
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
                           color: primaryBlue,
@@ -1043,7 +1043,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: darkBlue,
-                fontFamily: appFontFamily,
+                fontFamily: appHeadingFontFamily,
               ),
             ),
 
@@ -1081,7 +1081,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
                 color: darkBlue,
-                fontFamily: appFontFamily,
+                fontFamily: appHeadingFontFamily,
               ),
             ),
 
@@ -1266,7 +1266,7 @@ class ReportDetailsPage extends StatelessWidget {
             color: darkBlue,
             fontSize: 20,
             fontWeight: FontWeight.w700,
-            fontFamily: appFontFamily,
+            fontFamily: appHeadingFontFamily,
           ),
         ),
         centerTitle: true,
@@ -1317,7 +1317,7 @@ class ReportDetailsPage extends StatelessWidget {
                     color: statusColor,
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
-                    fontFamily: appFontFamily,
+                    fontFamily: appHeadingFontFamily,
                   ),
                 ),
               ),
@@ -1350,7 +1350,7 @@ class ReportDetailsPage extends StatelessWidget {
                   height: 1.25,
                   fontWeight: FontWeight.w700,
                   color: darkBlue,
-                  fontFamily: appFontFamily,
+                  fontFamily: appHeadingFontFamily,
                 ),
               ),
 
@@ -1411,7 +1411,7 @@ class ReportDetailsPage extends StatelessWidget {
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: darkBlue,
-                  fontFamily: appFontFamily,
+                  fontFamily: appHeadingFontFamily,
                 ),
               ),
 
