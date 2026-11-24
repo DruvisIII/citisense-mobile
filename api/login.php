@@ -118,7 +118,7 @@ try {
     if (!$user) {
         echo json_encode([
             "success" => false,
-            "message" => "No account found with this email."
+            "message" => "Incorrect email or password. Please try again."
         ]);
 
         $conn->close();
@@ -132,7 +132,7 @@ try {
     if (!password_verify($password, $user["pass"])) {
         echo json_encode([
             "success" => false,
-            "message" => "Incorrect password."
+            "message" => "Incorrect email or password. Please try again."
         ]);
 
         $conn->close();
@@ -231,11 +231,16 @@ try {
     // LOGIN SUCCESSFUL
     // ========================================================
 
+    // Session token for private endpoints (messages, comments, ...).
+    require_once __DIR__ . "/auth.php";
+    $authToken = citisense_create_session($conn, $loggedInUserID);
+
     // Preserve the exact JSON format expected by Flutter.
 
     echo json_encode([
         "success" => true,
         "message" => "Login successful.",
+        "authToken" => $authToken,
         "user" => [
             "userID" => $loggedInUserID,
             "firstName" => $user["firstName"],

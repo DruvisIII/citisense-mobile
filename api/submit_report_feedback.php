@@ -15,6 +15,8 @@
 require_once __DIR__ . '/engagement_common.php';
 engagement_headers();
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/time_helpers.php';
 
 ensure_engagement_tables($conn);
 
@@ -41,6 +43,8 @@ if (mb_strlen($comment) > 300) {
 }
 
 $isFixed = (int)$isFixedRaw;
+
+citisense_require_user($conn, $userID);
 
 $report = require_own_report($conn, $userID, $reportID);
 

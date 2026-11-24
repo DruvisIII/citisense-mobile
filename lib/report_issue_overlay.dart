@@ -12,6 +12,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'package:citisense/friendly_errors.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -84,6 +85,16 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
 
   // Turns on red highlights for missing fields after a submit attempt.
   bool _showMissingFields = false;
+
+  // "Others" says nothing about the problem, so it needs a description.
+  bool get _descriptionRequired => _selectedCategory == 'Others';
+
+  String? get _descriptionError =>
+      _showMissingFields &&
+          _descriptionRequired &&
+          _descriptionController.text.trim().isEmpty
+      ? 'Add a description'
+      : null;
 
   @override
   void initState() {
@@ -395,7 +406,10 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
       debugPrint('Current location error: $e');
       await _showLocationProblem(
         title: 'Unable to get your location',
-        message: e.toString().replaceFirst('Exception: ', ''),
+        message:
+            'Your phone could not find your location right now. Move to an '
+            'open area and try again, or tap "Set Location on Map" to pin '
+            'it yourself.',
       );
       return null;
     }
@@ -849,6 +863,12 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
 
     final String description = _descriptionController.text.trim();
 
+    if (_descriptionRequired && description.isEmpty) {
+      // Shown under the description field ("Add a description").
+      setState(() => _showMissingFields = true);
+      return;
+    }
+
     if (description.length > 300) {
       await _showFormPrompt(
         icon: Icons.notes_rounded,
@@ -977,9 +997,14 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
       // --------------------------------------------------------
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
+        debugPrint(
+          'Submit report HTTP ${response.statusCode}: ${response.body}',
+        );
         throw Exception(
-          'Server returned HTTP ${response.statusCode}.\n'
-          'Response: ${response.body}',
+          FriendlyErrors.fromResponse(
+            response,
+            fallback: 'Your report could not be sent. Please try again.',
+          ),
         );
       }
 
@@ -992,11 +1017,11 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
       try {
         decoded = jsonDecode(response.body);
       } catch (e) {
-        throw Exception('The server returned an invalid response.');
+        throw Exception(FriendlyErrors.server);
       }
 
       if (decoded is! Map<String, dynamic>) {
-        throw Exception('Invalid server response.');
+        throw Exception(FriendlyErrors.server);
       }
 
       // --------------------------------------------------------
@@ -1006,10 +1031,12 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
       final bool success = decoded['success'] == true;
 
       if (!success) {
-        final String message =
-            decoded['message']?.toString() ?? 'Failed to submit the report.';
-
-        throw Exception(message);
+        throw Exception(
+          FriendlyErrors.fromMessage(
+            decoded['message']?.toString(),
+            fallback: 'Your report could not be sent. Please try again.',
+          ),
+        );
       }
 
       // --------------------------------------------------------
@@ -1063,7 +1090,7 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
         return;
       }
 
-      _showMessage(e.toString().replaceFirst('Exception: ', ''));
+      _showMessage(FriendlyErrors.fromException(e));
     } finally {
       if (mounted) {
         setState(() {
@@ -1376,38 +1403,39 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
               ),
             ],
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Blue frame around the rounded white introduction area.
-              Padding(
-                padding: const EdgeInsets.fromLTRB(9, 11, 9, 0),
-                child: Container(
-                  height: 174,
-                  decoration: const BoxDecoration(
+          // Inside the blue frame: the header and the form are two separate
+          // rounded panels with a small gap, so the header reads as its own
+          // group instead of being glued onto the form.
+          child: Padding(
+            padding: const EdgeInsets.all(9),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
+                  decoration: BoxDecoration(
                     color: AppColors.background,
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(24),
-                    ),
+                    borderRadius: BorderRadius.circular(22),
                   ),
-                  child: Stack(
+                  child: const Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 28, 125, 12),
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
                             Text(
                               'Report an Issue',
-                              maxLines: 2,
                               style: TextStyle(
                                 color: fieldBlue,
                                 fontSize: 24,
-                                height: 1.1,
+                                height: 1.15,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
-                            SizedBox(height: 14),
+                            SizedBox(height: 8),
                             Text(
                               'Help us keep our community safe and clean!',
                               style: TextStyle(
@@ -1419,455 +1447,500 @@ class _ReportIssueOverlayState extends State<ReportIssueOverlay> {
                           ],
                         ),
                       ),
+                      SizedBox(width: 8),
                       // Mascot taking a photo with a phone (loops).
-                      const Positioned(
-                        right: 12,
-                        bottom: 6,
-                        child: SizedBox(
-                          width: 110,
-                          height: 118,
-                          child: CitiMascot(pose: MascotPose.camera),
-                        ),
+                      SizedBox(
+                        width: 96,
+                        height: 104,
+                        child: CitiMascot(pose: MascotPose.camera),
                       ),
                     ],
                   ),
                 ),
-              ),
-              Flexible(
-                child: Container(
-                  width: double.infinity,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(24),
-                      bottom: Radius.circular(28),
+                const SizedBox(height: 9),
+                Flexible(
+                  child: Container(
+                    width: double.infinity,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(22),
                     ),
-                  ),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        sectionHeading('1', 'Upload Photo'),
-                        const SizedBox(height: 12),
-                        InkWell(
-                          onTap: _isSubmitting || _isAnalyzing
-                              ? null
-                              : _showImageSourceOptions,
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                          child: Container(
-                            width: double.infinity,
-                            height: 165,
-                            clipBehavior: Clip.antiAlias,
-                            decoration: BoxDecoration(
-                              color: AppColors.primarySoft,
-                              borderRadius: BorderRadius.circular(AppRadius.md),
-                              border: Border.all(
-                                color: AppColors.primaryBorder,
-                              ),
-                            ),
-                            child: _selectedImageBytes != null
-                                ? Image.memory(
-                                    _selectedImageBytes!,
-                                    fit: BoxFit.cover,
-                                    width: double.infinity,
-                                  )
-                                : const Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.add_a_photo_outlined,
-                                        color: fieldBlue,
-                                        size: 38,
-                                      ),
-                                      SizedBox(height: 9),
-                                      Text(
-                                        'Tap to upload a photo',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: navy,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                          ),
-                        ),
-                        if (_isAnalyzing || _aiMessage != null) ...[
-                          const SizedBox(height: 9),
-                          if (_isAnalyzing)
-                            const Row(
-                              children: [
-                                SizedBox(
-                                  width: 15,
-                                  height: 15,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          sectionHeading('1', 'Upload Photo'),
+                          const SizedBox(height: 12),
+                          InkWell(
+                            onTap: _isSubmitting || _isAnalyzing
+                                ? null
+                                : _showImageSourceOptions,
+                            borderRadius: BorderRadius.circular(AppRadius.md),
+                            child: Container(
+                              width: double.infinity,
+                              height: 165,
+                              clipBehavior: Clip.antiAlias,
+                              decoration: BoxDecoration(
+                                color: AppColors.primarySoft,
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
                                 ),
-                                SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'AI is analyzing the photo...',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: muted,
+                                border: Border.all(
+                                  color: AppColors.primaryBorder,
+                                ),
+                              ),
+                              child: _selectedImageBytes != null
+                                  ? Image.memory(
+                                      _selectedImageBytes!,
+                                      fit: BoxFit.cover,
+                                      width: double.infinity,
+                                    )
+                                  : const Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.add_a_photo_outlined,
+                                          color: fieldBlue,
+                                          size: 38,
+                                        ),
+                                        SizedBox(height: 9),
+                                        Text(
+                                          'Tap to upload a photo',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            color: navy,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                            ),
+                          ),
+                          if (_isAnalyzing || _aiMessage != null) ...[
+                            const SizedBox(height: 9),
+                            if (_isAnalyzing)
+                              const Row(
+                                children: [
+                                  SizedBox(
+                                    width: 15,
+                                    height: 15,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
                                     ),
                                   ),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'AI is analyzing the photo...',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: muted,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            else
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: AppColors.accentSoft,
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.sm,
+                                  ),
                                 ),
-                              ],
-                            )
-                          else
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: AppColors.accentSoft,
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(
+                                      Icons.auto_awesome,
+                                      size: 16,
+                                      color: AppColors.accent,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _aiMessage!,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          height: 1.4,
+                                          color: navy,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                          const SizedBox(height: 26),
+                          sectionHeading(
+                            '2',
+                            'Issue Category',
+                            trailing: !_aiEnabled
+                                ? null
+                                : Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.accentSoft,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.auto_awesome,
+                                          size: 14,
+                                          color: AppColors.accent,
+                                        ),
+                                        SizedBox(width: 5),
+                                        Text(
+                                          'AI Suggestion',
+                                          style: TextStyle(
+                                            color: AppColors.accent,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            initialValue: _selectedCategory,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: AppColors.surfaceMuted,
+                              prefixIcon: Icon(
+                                _categoryIcon(_selectedCategory),
+                                color: fieldBlue,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 16,
+                              ),
+                              border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(
                                   AppRadius.sm,
                                 ),
                               ),
-                              child: Row(
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.sm,
+                                ),
+                                borderSide: const BorderSide(color: borderBlue),
+                              ),
+                              errorText:
+                                  _showMissingFields &&
+                                      _selectedCategory == null
+                                  ? 'Please select a category.'
+                                  : null,
+                            ),
+                            hint: const Text(
+                              'Select category',
+                              style: TextStyle(color: muted),
+                            ),
+                            items: _categories
+                                .map(
+                                  (category) => DropdownMenuItem<String>(
+                                    value: category,
+                                    child: Text(
+                                      category,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: navy,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: _isSubmitting || _isAnalyzing
+                                ? null
+                                : (value) {
+                                    setState(() => _selectedCategory = value);
+                                  },
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _aiEnabled
+                                ? 'You can change the category if needed.'
+                                : 'AI Insights is off. Please choose a category.',
+                            style: const TextStyle(color: muted, fontSize: 12),
+                          ),
+                          const SizedBox(height: 26),
+                          sectionHeading('3', 'Location'),
+                          const SizedBox(height: 12),
+                          if (_selectedLocation != null) ...[
+                            _buildLocationPreview(),
+                            const SizedBox(height: 10),
+                          ],
+                          OutlinedButton(
+                            onPressed: _isSubmitting || _isLocating
+                                ? null
+                                : _openMapPicker,
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: AppColors.surfaceMuted,
+                              minimumSize: const Size(double.infinity, 57),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 15,
+                              ),
+                              side: BorderSide(
+                                color:
+                                    _showMissingFields &&
+                                        _selectedLocation == null
+                                    ? AppColors.danger
+                                    : borderBlue,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.sm,
+                                ),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                _isLocating
+                                    ? const SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.4,
+                                        ),
+                                      )
+                                    : Icon(
+                                        _selectedLocation == null
+                                            ? Icons.location_on_outlined
+                                            : Icons.where_to_vote_rounded,
+                                        color: _selectedLocation == null
+                                            ? fieldBlue
+                                            : AppColors.success,
+                                        size: 27,
+                                      ),
+                                const SizedBox(width: 13),
+                                Expanded(
+                                  child: Text(
+                                    _isLocating
+                                        ? 'Getting your location...'
+                                        : _selectedLocation == null
+                                        ? 'Set Location on Map'
+                                        : 'Location pinned (tap to change)',
+                                    style: const TextStyle(
+                                      color: navy,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                const Icon(Icons.chevron_right, color: navy),
+                              ],
+                            ),
+                          ),
+                          if (_selectedLocation != null) ...[
+                            if (_selectedAddress != null &&
+                                _selectedAddress!.trim().isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Icon(
-                                    Icons.auto_awesome,
+                                    Icons.place_outlined,
                                     size: 16,
-                                    color: AppColors.accent,
+                                    color: AppColors.success,
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 6),
                                   Expanded(
                                     child: Text(
-                                      _aiMessage!,
+                                      _selectedAddress!,
                                       style: const TextStyle(
+                                        color: navy,
                                         fontSize: 12,
                                         height: 1.4,
-                                        color: navy,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                   ),
                                 ],
                               ),
+                            ],
+                            const SizedBox(height: 6),
+                            Text(
+                              'Latitude: ${_selectedLocation!.latitude.toStringAsFixed(6)}  '
+                              'Longitude: ${_selectedLocation!.longitude.toStringAsFixed(6)}',
+                              style: const TextStyle(
+                                color: muted,
+                                fontSize: 11,
+                              ),
                             ),
-                        ],
-                        const SizedBox(height: 26),
-                        sectionHeading(
-                          '2',
-                          'Issue Category',
-                          trailing: !_aiEnabled
-                              ? null
-                              : Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.accentSoft,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.auto_awesome,
-                                        size: 14,
-                                        color: AppColors.accent,
-                                      ),
-                                      SizedBox(width: 5),
-                                      Text(
-                                        'AI Suggestion',
-                                        style: TextStyle(
-                                          color: AppColors.accent,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          initialValue: _selectedCategory,
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: AppColors.surfaceMuted,
-                            prefixIcon: Icon(
-                              _categoryIcon(_selectedCategory),
-                              color: fieldBlue,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 16,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(AppRadius.sm),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(AppRadius.sm),
-                              borderSide: const BorderSide(color: borderBlue),
-                            ),
-                            errorText:
-                                _showMissingFields && _selectedCategory == null
-                                ? 'Please select a category.'
-                                : null,
-                          ),
-                          hint: const Text(
-                            'Select category',
-                            style: TextStyle(color: muted),
-                          ),
-                          items: _categories
-                              .map(
-                                (category) => DropdownMenuItem<String>(
-                                  value: category,
-                                  child: Text(
-                                    category,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: navy,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: _isSubmitting || _isAnalyzing
-                              ? null
-                              : (value) {
-                                  setState(() => _selectedCategory = value);
-                                },
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _aiEnabled
-                              ? 'You can change the category if needed.'
-                              : 'AI Insights is off. Please choose a category.',
-                          style: const TextStyle(color: muted, fontSize: 12),
-                        ),
-                        const SizedBox(height: 26),
-                        sectionHeading('3', 'Location'),
-                        const SizedBox(height: 12),
-                        if (_selectedLocation != null) ...[
-                          _buildLocationPreview(),
-                          const SizedBox(height: 10),
-                        ],
-                        OutlinedButton(
-                          onPressed: _isSubmitting || _isLocating
-                              ? null
-                              : _openMapPicker,
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor: AppColors.surfaceMuted,
-                            minimumSize: const Size(double.infinity, 57),
-                            padding: const EdgeInsets.symmetric(horizontal: 15),
-                            side: BorderSide(
+                          ],
+                          const SizedBox(height: 8),
+                          Text(
+                            _showMissingFields && _selectedLocation == null
+                                ? 'Please pin the location of the issue.'
+                                : _locationNote ??
+                                      'Tap to pin the exact location of the issue.',
+                            style: TextStyle(
                               color:
                                   _showMissingFields &&
                                       _selectedLocation == null
                                   ? AppColors.danger
-                                  : borderBlue,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(AppRadius.sm),
+                                  : _selectedLocation == null &&
+                                        _locationNote != null
+                                  ? AppColors.warning
+                                  : muted,
+                              fontSize: 12,
+                              fontWeight:
+                                  _locationNote != null ||
+                                      (_showMissingFields &&
+                                          _selectedLocation == null)
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
                             ),
                           ),
-                          child: Row(
+                          const SizedBox(height: 26),
+                          sectionHeading(
+                            '4',
+                            _descriptionRequired
+                                ? 'Description (required)'
+                                : 'Description',
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _descriptionController,
+                            enabled: !_isSubmitting,
+                            maxLength: 300,
+                            maxLines: 5,
+                            minLines: 4,
+                            onChanged: (_) => setState(() {}),
+                            decoration: InputDecoration(
+                              hintText: _descriptionRequired
+                                  ? 'Describe the issue (required for "Others")'
+                                  : 'Please describe the issue...',
+                              hintStyle: const TextStyle(color: muted),
+                              filled: true,
+                              fillColor: AppColors.surfaceMuted,
+                              counterText: '',
+                              contentPadding: const EdgeInsets.all(16),
+                              errorText: _descriptionError,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.sm,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.sm,
+                                ),
+                                borderSide: const BorderSide(color: borderBlue),
+                              ),
+                              errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.sm,
+                                ),
+                                borderSide: const BorderSide(
+                                  color: AppColors.danger,
+                                  width: 1.4,
+                                ),
+                              ),
+                              focusedErrorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.sm,
+                                ),
+                                borderSide: const BorderSide(
+                                  color: AppColors.danger,
+                                  width: 1.8,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              '${_descriptionController.text.length}/300',
+                              style: const TextStyle(
+                                color: muted,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 22),
+                          Row(
                             children: [
-                              _isLocating
-                                  ? const SizedBox(
-                                      width: 22,
-                                      height: 22,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.4,
-                                      ),
-                                    )
-                                  : Icon(
-                                      _selectedLocation == null
-                                          ? Icons.location_on_outlined
-                                          : Icons.where_to_vote_rounded,
-                                      color: _selectedLocation == null
-                                          ? fieldBlue
-                                          : AppColors.success,
-                                      size: 27,
-                                    ),
-                              const SizedBox(width: 13),
                               Expanded(
-                                child: Text(
-                                  _isLocating
-                                      ? 'Getting your location...'
-                                      : _selectedLocation == null
-                                      ? 'Set Location on Map'
-                                      : 'Location pinned (tap to change)',
-                                  style: const TextStyle(
-                                    color: navy,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
+                                child: OutlinedButton(
+                                  onPressed: _isSubmitting
+                                      ? null
+                                      : () => Navigator.of(context).pop(),
+                                  style: OutlinedButton.styleFrom(
+                                    minimumSize: const Size(0, 54),
+                                    side: const BorderSide(color: fieldBlue),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                        AppRadius.sm,
+                                      ),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Cancel',
+                                    style: TextStyle(
+                                      color: fieldBlue,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
                                 ),
                               ),
-                              const Icon(Icons.chevron_right, color: navy),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: _isSubmitting || _isAnalyzing
+                                      ? null
+                                      : _submitReport,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: fieldBlue,
+                                    foregroundColor: Colors.white,
+                                    minimumSize: const Size(0, 54),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                        AppRadius.sm,
+                                      ),
+                                    ),
+                                  ),
+                                  child: _isSubmitting
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : const Text(
+                                          'Submit Report',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                ),
+                              ),
                             ],
                           ),
-                        ),
-                        if (_selectedLocation != null) ...[
-                          if (_selectedAddress != null &&
-                              _selectedAddress!.trim().isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Icon(
-                                  Icons.place_outlined,
-                                  size: 16,
-                                  color: AppColors.success,
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    _selectedAddress!,
-                                    style: const TextStyle(
-                                      color: navy,
-                                      fontSize: 12,
-                                      height: 1.4,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                          const SizedBox(height: 6),
-                          Text(
-                            'Latitude: ${_selectedLocation!.latitude.toStringAsFixed(6)}  '
-                            'Longitude: ${_selectedLocation!.longitude.toStringAsFixed(6)}',
-                            style: const TextStyle(color: muted, fontSize: 11),
-                          ),
                         ],
-                        const SizedBox(height: 8),
-                        Text(
-                          _showMissingFields && _selectedLocation == null
-                              ? 'Please pin the location of the issue.'
-                              : _locationNote ??
-                                    'Tap to pin the exact location of the issue.',
-                          style: TextStyle(
-                            color:
-                                _showMissingFields && _selectedLocation == null
-                                ? AppColors.danger
-                                : _selectedLocation == null &&
-                                      _locationNote != null
-                                ? AppColors.warning
-                                : muted,
-                            fontSize: 12,
-                            fontWeight:
-                                _locationNote != null ||
-                                    (_showMissingFields &&
-                                        _selectedLocation == null)
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                          ),
-                        ),
-                        const SizedBox(height: 26),
-                        sectionHeading('4', 'Description'),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _descriptionController,
-                          enabled: !_isSubmitting,
-                          maxLength: 300,
-                          maxLines: 5,
-                          minLines: 4,
-                          onChanged: (_) => setState(() {}),
-                          decoration: InputDecoration(
-                            hintText: 'Please describe the issue...',
-                            hintStyle: const TextStyle(color: muted),
-                            filled: true,
-                            fillColor: AppColors.surfaceMuted,
-                            counterText: '',
-                            contentPadding: const EdgeInsets.all(16),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(AppRadius.sm),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(AppRadius.sm),
-                              borderSide: const BorderSide(color: borderBlue),
-                            ),
-                          ),
-                        ),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            '${_descriptionController.text.length}/300',
-                            style: const TextStyle(color: muted, fontSize: 12),
-                          ),
-                        ),
-                        const SizedBox(height: 22),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: _isSubmitting
-                                    ? null
-                                    : () => Navigator.of(context).pop(),
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size(0, 54),
-                                  side: const BorderSide(color: fieldBlue),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(
-                                      AppRadius.sm,
-                                    ),
-                                  ),
-                                ),
-                                child: const Text(
-                                  'Cancel',
-                                  style: TextStyle(
-                                    color: fieldBlue,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: _isSubmitting || _isAnalyzing
-                                    ? null
-                                    : _submitReport,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: fieldBlue,
-                                  foregroundColor: Colors.white,
-                                  minimumSize: const Size(0, 54),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(
-                                      AppRadius.sm,
-                                    ),
-                                  ),
-                                ),
-                                child: _isSubmitting
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : const Text(
-                                        'Submit Report',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

@@ -12,6 +12,8 @@
 require_once __DIR__ . '/engagement_common.php';
 engagement_headers();
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/time_helpers.php';
 
 ensure_engagement_tables($conn);
 
@@ -30,6 +32,8 @@ if ($message === '') {
 if (mb_strlen($message) > 500) {
     engagement_respond(false, 'Messages must not exceed 500 characters.', 400);
 }
+
+citisense_require_user($conn, $userID);
 
 require_own_report($conn, $userID, $reportID);
 
@@ -72,6 +76,6 @@ engagement_respond(true, 'Message sent.', 200, [
         'id' => $id,
         'type' => 'resident',
         'message' => $message,
-        'createdAt' => date('Y-m-d H:i:s')
+        'createdAt' => gmdate('Y-m-d\TH:i:s+00:00')
     ]
 ]);
