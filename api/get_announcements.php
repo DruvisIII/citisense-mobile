@@ -182,6 +182,7 @@ try {
     echo json_encode([
         "success" => true,
         "message" => "Announcements retrieved successfully.",
+        "serverTime" => citisense_server_time($conn),
         "data" => $announcements
     ]);
 

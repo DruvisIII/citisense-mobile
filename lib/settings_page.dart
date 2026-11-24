@@ -12,6 +12,7 @@ import 'package:citisense/change_password_page.dart';
 import 'package:citisense/friendly_errors.dart';
 import 'package:citisense/validators.dart';
 import 'package:citisense/app_theme.dart';
+import 'package:citisense/ui_components.dart';
 import 'package:citisense/mascot.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -31,6 +32,9 @@ class SettingsPage extends StatefulWidget {
   final String? profilePic;
   final String barangayID;
 
+  /// Shown in the page header, like on Home.
+  final String barangayName;
+
   /// Tells Home about saved personal details (name, picture, ...).
   final ValueChanged<Map<String, dynamic>>? onProfileUpdated;
 
@@ -43,6 +47,7 @@ class SettingsPage extends StatefulWidget {
     required this.contactNo,
     this.profilePic,
     required this.barangayID,
+    this.barangayName = '',
     this.onProfileUpdated,
   });
 
@@ -219,66 +224,15 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // Shared header geometry for Notifications and Settings.
-  // Keep these measurements identical in both pages.
+  // Same header as Home: same slots, sizes and spacing on every page.
   Widget _buildHeader() {
-    return SizedBox(
-      width: double.infinity,
-      height: 222,
-      child: LayoutBuilder(
-        builder: (context, constraints) => Stack(
-          children: [
-            Positioned(
-              left: 22,
-              right: 22,
-              top: 38,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Settings',
-                    maxLines: 1,
-                    softWrap: false,
-                    style: const TextStyle(
-                      fontFamily: appHeadingFontFamily,
-                      fontSize: 37,
-                      fontWeight: FontWeight.w800,
-                      height: 1.15,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 22,
-              top: 109,
-              width: (constraints.maxWidth - 44) * 0.55,
-              child: Text(
-                'Manage your account and app preferences.',
-                style: const TextStyle(
-                  fontFamily: appFontFamily,
-                  fontSize: 16,
-                  height: 1.5,
-                  color: textGrey,
-                ),
-              ),
-            ),
-            // Mascot (static pose for this page).
-            Positioned(
-              right: 18,
-              top: 84,
-              bottom: 6,
-              width: (constraints.maxWidth - 44) * 0.40,
-              child: const CitiMascot(
-                pose: MascotPose.settings,
-                backdrop: true,
-              ),
-            ),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      child: CitiPageHeader(
+        barangayName: widget.barangayName,
+        title: 'Settings',
+        description: 'Manage your account and app preferences.',
+        mascot: const CitiMascot(pose: MascotPose.settings, backdrop: true),
       ),
     );
   }
@@ -548,20 +502,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 : scale >= 1.15
                 ? 'Large'
                 : 'Medium';
-            return Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceMuted,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-              ),
-              child: Row(
-                children: [
-                  Expanded(child: _fontOption('Small', selected)),
-                  Expanded(child: _fontOption('Medium', selected)),
-                  Expanded(child: _fontOption('Large', selected)),
-                ],
-              ),
+            const labels = ['Small', 'Medium', 'Large'];
+            return SlidingToggle.subtle(
+              labels: labels,
+              selectedIndex: labels.indexOf(selected),
+              onChanged: (index) =>
+                  appFontScale.value = const [0.8, 1.0, 1.2][index],
             );
           },
         ),
@@ -705,56 +651,6 @@ class _SettingsPageState extends State<SettingsPage> {
       ],
     ),
   );
-
-  Widget _fontOption(String label, String selected) {
-    final isSelected = label == selected;
-
-    return GestureDetector(
-      onTap: () {
-        double newScale;
-
-        if (label == 'Small') {
-          newScale = 0.8;
-        } else if (label == 'Large') {
-          newScale = 1.2;
-        } else {
-          newScale = 1.0;
-        }
-
-        appFontScale.value = newScale;
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 9),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppRadius.sm - 3),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: AppColors.shadow.withValues(alpha: 0.06),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Text(
-          label,
-          maxLines: 1,
-          softWrap: false,
-          overflow: TextOverflow.fade,
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            color: isSelected ? darkBlue : textGrey,
-            fontFamily: appHeadingFontFamily,
-          ),
-        ),
-      ),
-    );
-  }
 
   void _logout() {
     showDialog<bool>(

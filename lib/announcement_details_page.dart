@@ -725,31 +725,109 @@ class _AnnouncementCommentsState extends State<AnnouncementComments> {
 
     final threads = _threads(_comments);
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final thread in threads) ...[
-          _buildComment(thread.root, isReply: false),
-          if (thread.replies.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(left: 22),
-              child: Container(
-                padding: const EdgeInsets.only(left: 12),
-                decoration: const BoxDecoration(
-                  border: Border(
-                    left: BorderSide(color: AppColors.primaryBorder, width: 2),
+        for (var t = 0; t < threads.length; t++)
+          // Each top-level comment is its own thread: the line starts at
+          // its picture and ends at its last reply, never reaching the
+          // next comment.
+          Padding(
+            padding: EdgeInsets.only(bottom: t == threads.length - 1 ? 0 : 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _commentRow(
+                  threads[t].root,
+                  avatarRadius: _rootAvatarRadius,
+                  lineBelow: threads[t].replies.isNotEmpty,
+                ),
+                for (var r = 0; r < threads[t].replies.length; r++)
+                  _replyRow(
+                    threads[t].replies[r],
+                    isLast: r == threads[t].replies.length - 1,
                   ),
-                ),
-                child: Column(
-                  children: [
-                    for (final reply in thread.replies)
-                      _buildComment(reply, isReply: true),
-                  ],
-                ),
-              ),
+              ],
             ),
-        ],
+          ),
       ],
     );
   }
+
+  static const double _rootAvatarRadius = 17;
+  static const double _replyAvatarRadius = 14;
+  static const double _replyGap = 10;
+
+  /// A comment: picture on the left (with the thread line under it when
+  /// it has replies), then the comment and its actions.
+  Widget _commentRow(
+    AnnouncementComment c, {
+    required double avatarRadius,
+    bool lineBelow = false,
+  }) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: avatarRadius * 2,
+            child: Column(
+              children: [
+                _avatar(c, radius: avatarRadius),
+                if (lineBelow)
+                  Expanded(
+                    child: Center(
+                      child: Container(width: 2, color: _threadLineColor),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: _buildComment(
+                c,
+                isReply: avatarRadius < _rootAvatarRadius,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// A reply, indented under its comment, with an elbow from the thread
+  /// line to the reply's picture. The line continues past it only when
+  /// more replies follow.
+  Widget _replyRow(AnnouncementComment c, {required bool isLast}) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: _rootAvatarRadius * 2,
+            child: CustomPaint(
+              painter: _ThreadConnectorPainter(
+                lineX: _rootAvatarRadius,
+                elbowY: _replyGap + _replyAvatarRadius,
+                continues: !isLast,
+                color: _threadLineColor,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: _replyGap),
+              child: _commentRow(c, avatarRadius: _replyAvatarRadius),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static const Color _threadLineColor = AppColors.primaryBorder;
 
   /// Groups replies under the top-level comment they belong to, like
   /// Facebook: a reply to a reply stays in the same thread.
@@ -814,106 +892,103 @@ class _AnnouncementCommentsState extends State<AnnouncementComments> {
   Widget _buildComment(AnnouncementComment c, {required bool isReply}) {
     final bool official = c.fromBarangay;
 
-    return Container(
-      margin: EdgeInsets.only(bottom: isReply ? 8 : 10),
-      padding: EdgeInsets.all(isReply ? 10 : 12),
-      decoration: BoxDecoration(
-        color: official ? AppColors.primarySoft : AppColors.surfaceMuted,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(
-          color: official ? AppColors.primaryBorder : Colors.transparent,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _avatar(c, radius: isReply ? 14 : 17),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 6,
-                  runSpacing: 2,
-                  children: [
-                    Text(
-                      c.isMine ? '${c.name} (You)' : c.name,
-                      style: TextStyle(
-                        fontFamily: appHeadingFontFamily,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: official ? AppColors.primary : AppColors.ink,
-                      ),
-                    ),
-                    if (official) _badge('Barangay', AppColors.primary),
-                    if (c.hidden)
-                      _badge('Hidden by barangay', AppColors.danger),
-                  ],
-                ),
-                if (c.replyToName != null)
-                  _replyPreview(c.replyToName!, c.replyToText ?? ''),
-                if (c.parentMissing)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 2),
-                    child: Text(
-                      'Replying to a comment that was removed',
-                      style: TextStyle(
-                        fontFamily: appFontFamily,
-                        fontSize: 11.5,
-                        fontStyle: FontStyle.italic,
-                        color: AppColors.textMuted,
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: 4),
-                Text(
-                  c.message,
-                  style: const TextStyle(
-                    fontFamily: appFontFamily,
-                    fontFamilyFallback: emojiFontFallback,
-                    fontSize: 13.5,
-                    height: 1.45,
-                    color: AppColors.ink,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Text(
-                      relativeTime(c.createdAt),
-                      style: const TextStyle(
-                        fontFamily: appFontFamily,
-                        fontSize: 11.5,
-                        color: AppColors.textMuted,
-                      ),
-                    ),
-                    if (!c.hidden) ...[
-                      const SizedBox(width: 12),
-                      InkWell(
-                        onTap: () => setState(() => _replyingTo = c),
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 2),
-                          child: Text(
-                            'Reply',
-                            style: TextStyle(
-                              fontFamily: appHeadingFontFamily,
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(isReply ? 10 : 12),
+          decoration: BoxDecoration(
+            color: official ? AppColors.primarySoft : AppColors.surfaceMuted,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(
+              color: official ? AppColors.primaryBorder : Colors.transparent,
             ),
           ),
-        ],
-      ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 6,
+                runSpacing: 2,
+                children: [
+                  Text(
+                    c.isMine ? '${c.name} (You)' : c.name,
+                    style: TextStyle(
+                      fontFamily: appHeadingFontFamily,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: official ? AppColors.primary : AppColors.ink,
+                    ),
+                  ),
+                  if (official) _badge('Barangay', AppColors.primary),
+                  if (c.hidden) _badge('Hidden by barangay', AppColors.danger),
+                ],
+              ),
+              if (c.replyToName != null)
+                _replyPreview(c.replyToName!, c.replyToText ?? ''),
+              if (c.parentMissing)
+                const Padding(
+                  padding: EdgeInsets.only(top: 2),
+                  child: Text(
+                    'Replying to a comment that was removed',
+                    style: TextStyle(
+                      fontFamily: appFontFamily,
+                      fontSize: 11.5,
+                      fontStyle: FontStyle.italic,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 4),
+              Text(
+                c.message,
+                style: const TextStyle(
+                  fontFamily: appFontFamily,
+                  fontFamilyFallback: emojiFontFallback,
+                  fontSize: 13.5,
+                  height: 1.45,
+                  color: AppColors.ink,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+          child: Row(
+            children: [
+              Text(
+                relativeTime(c.createdAt),
+                style: const TextStyle(
+                  fontFamily: appFontFamily,
+                  fontSize: 11.5,
+                  color: AppColors.textMuted,
+                ),
+              ),
+              if (!c.hidden) ...[
+                const SizedBox(width: 12),
+                InkWell(
+                  onTap: () => setState(() => _replyingTo = c),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 2),
+                    child: Text(
+                      'Reply',
+                      style: TextStyle(
+                        fontFamily: appHeadingFontFamily,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -1067,4 +1142,53 @@ class _AnnouncementCommentsState extends State<AnnouncementComments> {
       ],
     );
   }
+}
+
+/// The thread line beside a reply: down from the comment's picture, then
+/// a rounded elbow into the reply's picture. When more replies follow,
+/// the line also continues down to them.
+class _ThreadConnectorPainter extends CustomPainter {
+  const _ThreadConnectorPainter({
+    required this.lineX,
+    required this.elbowY,
+    required this.continues,
+    required this.color,
+  });
+
+  final double lineX;
+  final double elbowY;
+  final bool continues;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const double bend = 8;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final elbow = Path()
+      ..moveTo(lineX, 0)
+      ..lineTo(lineX, elbowY - bend)
+      ..quadraticBezierTo(lineX, elbowY, lineX + bend, elbowY)
+      ..lineTo(size.width, elbowY);
+    canvas.drawPath(elbow, paint);
+
+    if (continues) {
+      canvas.drawLine(
+        Offset(lineX, elbowY - bend),
+        Offset(lineX, size.height),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ThreadConnectorPainter old) =>
+      old.lineX != lineX ||
+      old.elbowY != elbowY ||
+      old.continues != continues ||
+      old.color != color;
 }

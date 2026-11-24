@@ -45,6 +45,8 @@ If the admin website keeps its uploads on a volume outside its web folder (`CS_U
 
 The admin panel saves report updates (`notification`) and announcements (`announcements`) without sending pushes. `push_dispatch.php?key=<PUSH_DISPATCH_SECRET>` sends a push for each new one, once, and records it in `push_sent_log`. Call it after the admin saves something, or on a schedule.
 
+It also sends **"Announcement updated: …"** when an administrator edits an announcement's title, text or pictures. Each announcement's last pushed version is kept as a fingerprint in `announcement_push_state` (created automatically). One edit sends one push, saving without changes sends nothing, and tapping it opens that announcement. The first run after updating records the current versions without sending anything.
+
 
 
 The PHP backend exposes `POST /api/predict_roboflow.php` for image predictions with the published CitiSense Roboflow Workflow. It accepts a multipart form upload with the field name `image` (JPG, PNG, or WebP; maximum 8 MB). The response returns the workflow's output map under `outputs`; the current published workflow output is named `predictions`.

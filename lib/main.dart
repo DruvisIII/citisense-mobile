@@ -3,6 +3,7 @@ import 'package:citisense/app_settings.dart';
 import 'package:citisense/app_theme.dart';
 import 'package:citisense/auth_session.dart';
 import 'package:citisense/session_manager.dart';
+import 'package:citisense/ui_components.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -52,9 +53,18 @@ class MyApp extends StatelessWidget {
           builder: (context, child) {
             final mediaQuery = MediaQuery.of(context);
 
-            return MediaQuery(
-              data: mediaQuery.copyWith(textScaler: TextScaler.linear(scale)),
-              child: child!,
+            // Text grows or shrinks smoothly when Font Size changes.
+            return TweenAnimationBuilder<double>(
+              tween: Tween<double>(end: scale),
+              duration: AppMotion.toggle,
+              curve: AppMotion.curve,
+              child: child,
+              builder: (context, animatedScale, child) => MediaQuery(
+                data: mediaQuery.copyWith(
+                  textScaler: TextScaler.linear(animatedScale),
+                ),
+                child: child!,
+              ),
             );
           },
         );

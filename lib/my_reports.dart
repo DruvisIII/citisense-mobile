@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:citisense/app_theme.dart';
+import 'package:citisense/ui_components.dart';
 import 'package:citisense/live_updates.dart';
 import 'package:citisense/report_engagement.dart';
 import 'package:citisense/mascot.dart';
@@ -499,21 +500,27 @@ class _MyReportsPageState extends State<MyReportsPage> {
                   )
                 else if (_errorMessage != null)
                   _buildErrorState()
-                else if (filteredReports.isEmpty)
-                  _buildEmptyState()
                 else
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
-                    child: Column(
-                      children: filteredReports
-                          .map(
-                            (report) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: _buildReportCard(report),
+                  // The list fades into the newly chosen filter.
+                  AppMotion.fadeSwitcher(
+                    contentKey: _selectedFilter,
+                    child: filteredReports.isEmpty
+                        ? _buildEmptyState()
+                        : Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
+                            child: Column(
+                              children: filteredReports
+                                  .map(
+                                    (report) => Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 12,
+                                      ),
+                                      child: _buildReportCard(report),
+                                    ),
+                                  )
+                                  .toList(),
                             ),
-                          )
-                          .toList(),
-                    ),
+                          ),
                   ),
               ],
             ),
@@ -524,7 +531,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
   }
 
   Widget _buildTopSection() {
-    // Keep the header sizing and positioning identical to HomePage.
+    // Same header as Home (and Notifications / Settings).
     final hour = DateTime.now().hour;
     final greeting = hour < 12
         ? 'Good morning,'
@@ -532,117 +539,14 @@ class _MyReportsPageState extends State<MyReportsPage> {
         ? 'Good afternoon,'
         : 'Good evening,';
 
-    return LayoutBuilder(
-      builder: (context, constraints) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.location_on, color: primaryBlue, size: 32),
-                const SizedBox(width: 9),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.barangayName.isNotEmpty
-                            ? 'Barangay ${widget.barangayName}'
-                            : 'Your Barangay',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.ink,
-                          fontFamily: appHeadingFontFamily,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      const Text(
-                        'Cebu City',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: textGrey,
-                          fontFamily: appFontFamily,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 15),
-            SizedBox(
-              height: 190,
-              width: double.infinity,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Positioned(
-                    left: 0,
-                    top: 12,
-                    right: 0,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          greeting,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: textGrey,
-                            fontFamily: appFontFamily,
-                          ),
-                        ),
-                        const SizedBox(height: 1),
-                        SizedBox(
-                          width: constraints.maxWidth * .53,
-                          child: Text(
-                            '${widget.firstName.isNotEmpty ? widget.firstName : 'User'}!',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 41,
-                              height: 1.12,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.ink,
-                              fontFamily: appHeadingFontFamily,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 13),
-                        SizedBox(
-                          width: constraints.maxWidth * .46,
-                          child: const Text(
-                            'Let’s work together for a safer and cleaner community.',
-                            style: TextStyle(
-                              fontSize: 14,
-                              height: 1.55,
-                              color: textGrey,
-                              fontFamily: appFontFamily,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Positioned(
-                    right: -10,
-                    bottom: -4,
-                    child: SizedBox(
-                      width: constraints.maxWidth * .40,
-                      height: 188,
-                      child: _buildMascot(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      child: CitiPageHeader(
+        barangayName: widget.barangayName,
+        eyebrow: greeting,
+        title: '${widget.firstName.isNotEmpty ? widget.firstName : 'User'}!',
+        description: 'Let’s work together for a safer and cleaner community.',
+        mascot: _buildMascot(),
       ),
     );
   }
@@ -703,50 +607,13 @@ class _MyReportsPageState extends State<MyReportsPage> {
   }
 
   Widget _buildFilterButtons() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(7),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: SlidingToggle(
+        labels: const ['All Reports', 'Ongoing', 'Completed'],
+        selectedIndex: _selectedFilter,
+        onChanged: (index) => setState(() => _selectedFilter = index),
         boxShadow: AppShadows.soft,
-      ),
-      child: Row(
-        children: [
-          _buildFilterButton(label: 'All Reports', index: 0),
-          _buildFilterButton(label: 'Ongoing', index: 1),
-          _buildFilterButton(label: 'Completed', index: 2),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterButton({required String label, required int index}) {
-    final selected = _selectedFilter == index;
-    return Expanded(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => setState(() => _selectedFilter = index),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 2),
-          decoration: BoxDecoration(
-            color: selected ? primaryBlue : Colors.transparent,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Text(
-            label,
-            maxLines: 1,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: appHeadingFontFamily,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: selected ? Colors.white : textGrey,
-            ),
-          ),
-        ),
       ),
     );
   }

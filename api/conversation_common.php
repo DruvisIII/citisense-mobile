@@ -121,9 +121,12 @@ function conversation_clean_text(string $text): string
     if (!mb_check_encoding($text, 'UTF-8')) {
         $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
     }
-    // Keeps the zero-width joiner (U+200D) and variation selectors that
-    // emoji such as 👨‍👩‍👧 and ❤️ are built from.
-    $text = preg_replace('/(?![\x{200C}\x{200D}\x{FE0E}\x{FE0F}])[^\P{C}\n\t]/u', '', $text) ?? '';
+    // Remove only control characters (except line breaks and tabs) and
+    // the bidirectional override marks that can disguise text. Everything
+    // else is kept: emoji joiners (U+200D), variation selectors, flag tag
+    // characters, and emoji newer than this server's Unicode tables
+    // (which older PCRE versions count as "unassigned").
+    $text = preg_replace('/(?![\n\t])\p{Cc}|[\x{202A}-\x{202E}\x{2066}-\x{2069}]/u', '', $text) ?? '';
     $text = preg_replace("/\n{3,}/", "\n\n", $text) ?? '';
     return trim($text);
 }

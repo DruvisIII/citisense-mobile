@@ -206,6 +206,7 @@ try {
     echo json_encode([
         "success" => true,
         "message" => "Notifications retrieved successfully.",
+        "serverTime" => citisense_server_time($conn),
         "data" => $notifications
     ]);
 } catch (Throwable $e) {

@@ -18,11 +18,13 @@ const String appFontFamily = 'Quicksand';
 const String appHeadingFontFamily = 'Nunito';
 
 /// Fonts to fall back to for emoji, which Quicksand and Nunito do not
-/// include. Android, iOS, Windows and other systems each provide one of
-/// these, so 😀 shows as a picture instead of an empty box.
+/// include. The app ships Noto Color Emoji (assets/fonts), so every emoji
+/// up to the newest Unicode version shows as a picture on every phone,
+/// even older ones whose system emoji font lacks it (empty boxes).
+/// The system emoji fonts follow as a last resort.
 const List<String> emojiFontFallback = [
-  'Noto Color Emoji',
   'NotoColorEmoji',
+  'Noto Color Emoji',
   'Apple Color Emoji',
   'Segoe UI Emoji',
   'Segoe UI Symbol',

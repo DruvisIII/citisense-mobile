@@ -59,3 +59,20 @@ function citisense_iso_time(mysqli $conn, $value): ?string
         return null;
     }
 }
+
+/**
+ * The database's current time, in the same form as citisense_iso_time().
+ * Sent with lists as "serverTime": the app measures how old each item is
+ * against this clock, so a wrong phone clock or time zone cannot turn
+ * "5 minutes ago" into "Yesterday".
+ */
+function citisense_server_time(mysqli $conn): ?string
+{
+    try {
+        $result = $conn->query('SELECT NOW() AS now');
+        $now = $result ? (string) ($result->fetch_assoc()['now'] ?? '') : '';
+        return citisense_iso_time($conn, $now);
+    } catch (Throwable $e) {
+        return null;
+    }
+}

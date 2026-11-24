@@ -3,7 +3,8 @@
 // PUSH DISPATCHER
 // ------------------------------------------------------------
 // Sends a push notification for every report update and every
-// barangay announcement that has not been pushed yet.
+// barangay announcement that has not been pushed yet, and one when
+// an administrator edits an announcement ("Announcement updated").
 //
 // The admin panel saves status changes into `notification` and
 // announcements into `announcements`; it does not send pushes
@@ -24,6 +25,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/send_push_notification.php';
+require_once __DIR__ . '/time_helpers.php';
 
 function dispatch_respond(int $status, array $body): never
 {
@@ -129,6 +131,32 @@ function dispatch_send(mysqli $conn, array $devices, string $title, string $body
     return $sent;
 }
 
+/** Phones of every resident of a barangay. */
+function dispatch_barangay_devices(mysqli $conn, string $barangayID): array
+{
+    // Residents, then their phones (two simple lookups, so differing
+    // table collations can't break a join).
+    $residents = $conn->prepare('SELECT userID FROM users WHERE barangayID = ?');
+    $residents->bind_param('s', $barangayID);
+    $residents->execute();
+    $userIDs = array_column($residents->get_result()->fetch_all(MYSQLI_ASSOC), 'userID');
+    $residents->close();
+
+    $list = [];
+    $devices = $conn->prepare('SELECT userID, fcmToken FROM user_device_tokens WHERE userID = ?');
+    foreach ($userIDs as $residentID) {
+        $residentID = (string) $residentID;
+        $devices->bind_param('s', $residentID);
+        $devices->execute();
+        foreach ($devices->get_result()->fetch_all(MYSQLI_ASSOC) as $device) {
+            $list[] = $device;
+        }
+    }
+    $devices->close();
+
+    return $list;
+}
+
 function dispatch_short(string $text, int $length = 150): string
 {
     $text = trim(preg_replace('/\s+/', ' ', strip_tags($text)) ?? '');
@@ -144,7 +172,7 @@ $summary = ['reports' => 0, 'announcements' => 0, 'pushesSent' => 0];
 // (dispatch_claim), because joining push_sent_log to tables imported
 // with another text collation fails with "Illegal mix of collations".
 $stmt = $conn->prepare(
-    "SELECT notifID, userID, reportID, message
+    "SELECT notifID, userID, reportID, message, dateSent
      FROM notification
      WHERE dateSent >= NOW() - INTERVAL " . DISPATCH_MAX_AGE_HOURS . " HOUR
      ORDER BY dateSent ASC
@@ -185,6 +213,7 @@ foreach ($pendingReports as $row) {
             'type' => $isMessage ? ($reportID !== '' ? 'report_message' : 'message') : 'report_status',
             'reportID' => $reportID,
             'notifID' => $notifID,
+            'sentAt' => (string) citisense_iso_time($conn, $row['dateSent']),
         ]
     );
 }
@@ -193,7 +222,7 @@ foreach ($pendingReports as $row) {
 // 2. Announcements -> every resident of that barangay
 // ------------------------------------------------------------
 $stmt = $conn->prepare(
-    "SELECT announceID, barangayID, title, content
+    "SELECT announceID, barangayID, title, content, datePosted
      FROM announcements
      WHERE datePosted >= NOW() - INTERVAL " . DISPATCH_MAX_AGE_HOURS . " HOUR
      ORDER BY datePosted ASC
@@ -209,26 +238,7 @@ foreach ($pendingAnnouncements as $row) {
         continue;
     }
 
-    $barangayID = (string) $row['barangayID'];
-    // Residents of the barangay, then their phones (two simple lookups,
-    // so differing table collations can't break a join).
-    $residents = $conn->prepare('SELECT userID FROM users WHERE barangayID = ?');
-    $residents->bind_param('s', $barangayID);
-    $residents->execute();
-    $userIDs = array_column($residents->get_result()->fetch_all(MYSQLI_ASSOC), 'userID');
-    $residents->close();
-
-    $list = [];
-    $devices = $conn->prepare('SELECT userID, fcmToken FROM user_device_tokens WHERE userID = ?');
-    foreach ($userIDs as $residentID) {
-        $residentID = (string) $residentID;
-        $devices->bind_param('s', $residentID);
-        $devices->execute();
-        foreach ($devices->get_result()->fetch_all(MYSQLI_ASSOC) as $device) {
-            $list[] = $device;
-        }
-    }
-    $devices->close();
+    $list = dispatch_barangay_devices($conn, (string) $row['barangayID']);
 
     $summary['announcements']++;
     $summary['pushesSent'] += dispatch_send(
@@ -236,8 +246,110 @@ foreach ($pendingAnnouncements as $row) {
         $list,
         'New announcement: ' . dispatch_short((string) $row['title'], 80),
         dispatch_short((string) $row['content']),
-        ['type' => 'announcement', 'announceID' => $announceID]
+        [
+            'type' => 'announcement',
+            'announceID' => $announceID,
+            'sentAt' => (string) citisense_iso_time($conn, $row['datePosted']),
+        ]
     );
 }
+
+// ------------------------------------------------------------
+// 3. Edited announcements -> every resident of that barangay
+// ------------------------------------------------------------
+// The admin website saves an edit (title, text, pictures) in one
+// transaction, so only finished edits are seen here. Each
+// announcement's last pushed version is kept as a fingerprint in
+// announcement_push_state. A different fingerprint means it was
+// edited: one "Announcement updated" push, claimed by changing the
+// stored fingerprint (so two dispatcher runs cannot both send it,
+// and saving without changes sends nothing).
+$conn->query(
+    "CREATE TABLE IF NOT EXISTS announcement_push_state (
+        announceID INT(11) NOT NULL,
+        fingerprint CHAR(40) NOT NULL,
+        updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (announceID)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+);
+
+$summary['announcementsUpdated'] = 0;
+
+$all = $conn->query('SELECT announceID, barangayID, title, content FROM announcements');
+$announcementRows = $all ? $all->fetch_all(MYSQLI_ASSOC) : [];
+
+$imageStmt = null;
+try {
+    $imageStmt = $conn->prepare(
+        'SELECT imagePath FROM announcement_images WHERE announceID = ? ORDER BY sortOrder ASC, imageID ASC'
+    );
+} catch (Throwable $noImages) {
+    $imageStmt = null; // No pictures table yet: text changes are still detected.
+}
+
+$stateStmt = $conn->prepare('SELECT fingerprint FROM announcement_push_state WHERE announceID = ? LIMIT 1');
+$insertState = $conn->prepare('INSERT IGNORE INTO announcement_push_state (announceID, fingerprint) VALUES (?, ?)');
+$claimEdit = $conn->prepare(
+    'UPDATE announcement_push_state SET fingerprint = ? WHERE announceID = ? AND fingerprint = ?'
+);
+
+foreach ($announcementRows as $row) {
+    $announceID = (int) $row['announceID'];
+
+    $images = [];
+    if ($imageStmt) {
+        $imageStmt->bind_param('i', $announceID);
+        $imageStmt->execute();
+        $images = array_column($imageStmt->get_result()->fetch_all(MYSQLI_ASSOC), 'imagePath');
+    }
+    $fingerprint = sha1((string) $row['title'] . "\0" . (string) $row['content'] . "\0" . implode("\n", $images));
+
+    $stateStmt->bind_param('i', $announceID);
+    $stateStmt->execute();
+    $known = $stateStmt->get_result()->fetch_assoc();
+
+    if (!$known) {
+        // First time seen (new announcements are pushed by section 2).
+        $insertState->bind_param('is', $announceID, $fingerprint);
+        $insertState->execute();
+        continue;
+    }
+
+    $previous = (string) $known['fingerprint'];
+    if ($previous === $fingerprint) {
+        continue;
+    }
+
+    $claimEdit->bind_param('sis', $fingerprint, $announceID, $previous);
+    $claimEdit->execute();
+    if ($claimEdit->affected_rows !== 1) {
+        continue; // Another dispatcher run already sent this edit.
+    }
+
+    $list = dispatch_barangay_devices($conn, (string) $row['barangayID']);
+
+    $summary['announcementsUpdated']++;
+    $summary['pushesSent'] += dispatch_send(
+        $conn,
+        $list,
+        'Announcement updated: ' . dispatch_short((string) $row['title'], 80),
+        dispatch_short((string) $row['content']),
+        [
+            'type' => 'announcement_updated',
+            'announceID' => (string) $announceID,
+            'sentAt' => (string) citisense_server_time($conn),
+        ]
+    );
+}
+
+$stateStmt->close();
+$insertState->close();
+$claimEdit->close();
+if ($imageStmt) {
+    $imageStmt->close();
+}
+
+// Forget deleted announcements.
+$conn->query('DELETE FROM announcement_push_state WHERE announceID NOT IN (SELECT announceID FROM announcements)');
 
 dispatch_respond(200, ['success' => true] + $summary);
