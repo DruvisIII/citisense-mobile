@@ -9,6 +9,9 @@
 // Railway Pro).
 //
 // Order of preference (first one configured wins):
+//   0. GMAIL_SCRIPT_URL + GMAIL_SCRIPT_SECRET -> free Google Apps
+//                          Script that sends from your own Gmail
+//                          (see README "Free Gmail sending")
 //   1. BREVO_API_KEY   -> https://api.brevo.com  (free, 300/day,
 //                          sender can be a verified Gmail address)
 //   2. RESEND_API_KEY  -> https://api.resend.com (needs a verified
@@ -27,6 +30,10 @@ require_once __DIR__ . '/email_secrets.php';
 function citisense_mail_configured(?array $secrets = null): bool
 {
     $secrets = $secrets ?? citisense_load_secrets();
+
+    if (!empty($secrets['gmail_script_url']) && !empty($secrets['gmail_script_secret'])) {
+        return true;
+    }
 
     $hasSender = !empty($secrets['mail_from_email']) || !empty($secrets['gmail_address']);
 
@@ -50,6 +57,15 @@ function citisense_send_mail(
     ?array $secrets = null
 ): bool {
     $secrets = $secrets ?? citisense_load_secrets();
+
+    if (!empty($secrets['gmail_script_url']) && !empty($secrets['gmail_script_secret'])) {
+        return citisense_send_via_gmail_script(
+            (string)$secrets['gmail_script_url'],
+            (string)$secrets['gmail_script_secret'],
+            (string)($secrets['mail_from_name'] ?? 'CitiSense'),
+            $toEmail, $toName, $subject, $htmlBody, $textBody
+        );
+    }
 
     $fromEmail = (string)($secrets['mail_from_email'] ?? $secrets['gmail_address'] ?? '');
     $fromName = (string)($secrets['mail_from_name'] ?? 'CitiSense');
@@ -106,6 +122,56 @@ function citisense_mail_post_json(string $url, array $headers, array $payload): 
     curl_close($ch);
 
     return [$status, $body, $error];
+}
+
+function citisense_send_via_gmail_script(
+    string $scriptUrl,
+    string $secret,
+    string $fromName,
+    string $toEmail,
+    string $toName,
+    string $subject,
+    string $htmlBody,
+    string $textBody
+): bool {
+    if (!function_exists('curl_init')) {
+        error_log('CitiSense mailer (Gmail script): PHP cURL extension is not enabled.');
+        return false;
+    }
+
+    $ch = curl_init($scriptUrl);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode([
+            'secret' => $secret,
+            'to' => $toEmail,
+            'name' => $fromName,
+            'subject' => $subject,
+            'html' => $htmlBody,
+            'text' => $textBody,
+        ]),
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+        // Apps Script answers with a redirect to the script's output.
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS => 5,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 30,
+    ]);
+
+    $body = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $error = curl_error($ch);
+    curl_close($ch);
+
+    $decoded = is_string($body) ? json_decode($body, true) : null;
+
+    if ($body === false || $status < 200 || $status >= 300 || !is_array($decoded) || ($decoded['success'] ?? false) !== true) {
+        error_log("CitiSense mailer (Gmail script) failed. HTTP {$status}; {$error}; response: " . substr((string)$body, 0, 500));
+        return false;
+    }
+
+    return true;
 }
 
 function citisense_send_via_brevo(

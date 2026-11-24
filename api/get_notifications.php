@@ -32,19 +32,67 @@ try {
     $notifications = [];
 
     /*
+     * Status names from the stats table (e.g. Pending, In Progress,
+     * Resolved, Overdue), longest first so "In Progress" wins over
+     * shorter names it contains.
+     */
+    $statusNames = [];
+    $statsResult = $conn->query("SELECT statusName FROM stats");
+    if ($statsResult) {
+        while ($statRow = $statsResult->fetch_assoc()) {
+            $name = trim((string) $statRow["statusName"]);
+            if ($name !== "") {
+                $statusNames[] = $name;
+            }
+        }
+    }
+    usort($statusNames, fn($a, $b) => mb_strlen($b) <=> mb_strlen($a));
+
+    /*
+     * The status this notification is about, read from the message the
+     * admin panel writes ("Your report REP001 is now In Progress.").
+     * Falls back to the report's current status.
+     */
+    $statusFromMessage = function (string $message, ?string $currentStatus) use ($statusNames): string {
+        $lower = mb_strtolower($message);
+
+        if (str_contains($lower, "was not accepted")) {
+            return "Rejected";
+        }
+        if (str_contains($lower, "back to pending")) {
+            return "Pending";
+        }
+        if (str_contains($lower, "replied") || str_contains($lower, "new message")) {
+            return "New Message";
+        }
+        foreach ($statusNames as $name) {
+            if (str_contains($lower, "is now " . mb_strtolower($name))) {
+                return $name;
+            }
+        }
+
+        return trim((string) $currentStatus) !== "" ? (string) $currentStatus : "Update";
+    };
+
+    /*
      * 1. Retrieve report notifications
      * belonging to the current user.
      */
     $sqlReports = "
         SELECT
-            notifID,
-            reportID,
-            message,
-            isRead,
-            dateSent
-        FROM notification
-        WHERE userID = ?
-        ORDER BY dateSent DESC
+            n.notifID,
+            n.reportID,
+            n.message,
+            n.isRead,
+            n.dateSent,
+            s.statusName AS currentStatus
+        FROM notification n
+        LEFT JOIN reports r
+            ON r.reportID = n.reportID
+        LEFT JOIN stats s
+            ON s.statusID = r.statusID
+        WHERE n.userID = ?
+        ORDER BY n.dateSent DESC
     ";
 
     $stmtReports = $conn->prepare($sqlReports);
@@ -66,6 +114,10 @@ try {
             "type" => "report",
             "reportID" => $row["reportID"],
             "title" => "Report Update",
+            "status" => $statusFromMessage(
+                (string) $row["message"],
+                $row["currentStatus"] ?? null
+            ),
             "message" => $row["message"],
             "timestamp" => $row["dateSent"],
             "isRead" => (bool) $row["isRead"]

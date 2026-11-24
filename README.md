@@ -4,9 +4,36 @@ A new Flutter project.
 
 ## Railway email variables
 
-Railway blocks outbound SMTP on the Free, Trial and Hobby plans, so Gmail SMTP cannot deliver OTPs there. `api/mailer.php` sends through Brevo when `BREVO_API_KEY` is set (sender: `MAIL_FROM_EMAIL`, a verified Brevo sender; optional `MAIL_FROM_NAME`), and otherwise falls back to `GMAIL_ADDRESS` + `GMAIL_APP_PASSWORD` over SMTP.
+Railway blocks outbound SMTP on the Free, Trial and Hobby plans, so Gmail SMTP cannot deliver OTPs there. `api/mailer.php` picks the first configured option:
 
-## Roboflow image predictions
+1. `GMAIL_SCRIPT_URL` + `GMAIL_SCRIPT_SECRET`: free, sends from your Gmail through a Google Apps Script (below).
+2. `BREVO_API_KEY` + `MAIL_FROM_EMAIL`: Brevo's email API.
+3. `GMAIL_ADDRESS` + `GMAIL_APP_PASSWORD`: Gmail SMTP (XAMPP, or Railway Pro).
+
+### Free Gmail sending
+
+1. Signed in to the Gmail account that should send the codes, open https://script.google.com and create a new project.
+2. Replace the editor contents with `tools/gmail_relay.gs` and save.
+3. Project Settings → Script Properties → add `SECRET` with a long random value.
+4. In the editor, choose the `authorize` function, click Run, and allow the Gmail permission.
+5. Deploy → New deployment → type **Web app**; Execute as **Me**; Who has access **Anyone**. Copy the Web app URL (ends in `/exec`).
+6. In Railway, set `GMAIL_SCRIPT_URL` to that URL and `GMAIL_SCRIPT_SECRET` to the same secret.
+
+Free Gmail accounts can send about 100 emails a day this way. If you edit the script later, deploy a new version (Deploy → Manage deployments → Edit → New version) so the URL keeps working.
+
+## Push notifications and announcement pictures (Railway)
+
+API service variables:
+
+| Variable | Used for |
+| --- | --- |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | Whole Firebase service-account JSON file (raw or base64) for sending pushes |
+| `PUSH_DISPATCH_SECRET` | Long random value that protects `push_dispatch.php` |
+| `ANNOUNCEMENT_MEDIA_BASE_URL` | Admin website address, e.g. `https://<admin>.up.railway.app/`, where announcement pictures are served |
+
+The admin panel saves report updates (`notification`) and announcements (`announcements`) without sending pushes. `push_dispatch.php?key=<PUSH_DISPATCH_SECRET>` sends a push for each new one, once, and records it in `push_sent_log`. Call it after the admin saves something, or on a schedule.
+
+
 
 The PHP backend exposes `POST /api/predict_roboflow.php` for image predictions with the published CitiSense Roboflow Workflow. It accepts a multipart form upload with the field name `image` (JPG, PNG, or WebP; maximum 8 MB). The response returns the workflow's output map under `outputs`; the current published workflow output is named `predictions`.
 

@@ -25,6 +25,8 @@ function citisense_load_secrets(): array
         'gmail_app_password' => 'GMAIL_APP_PASSWORD',
         'semaphore_api_key' => 'SEMAPHORE_API_KEY',
         'semaphore_sendername' => 'SEMAPHORE_SENDERNAME',
+        'gmail_script_url' => 'GMAIL_SCRIPT_URL',
+        'gmail_script_secret' => 'GMAIL_SCRIPT_SECRET',
         'brevo_api_key' => 'BREVO_API_KEY',
         'resend_api_key' => 'RESEND_API_KEY',
         'mail_from_email' => 'MAIL_FROM_EMAIL',
