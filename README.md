@@ -29,7 +29,19 @@ API service variables:
 | --- | --- |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | Whole Firebase service-account JSON file (raw or base64) for sending pushes |
 | `PUSH_DISPATCH_SECRET` | Long random value that protects `push_dispatch.php` |
-| `ANNOUNCEMENT_MEDIA_BASE_URL` | Admin website address, e.g. `https://<admin>.up.railway.app/`, where announcement pictures are served |
+| `ANNOUNCEMENT_MEDIA_BASE_URL` | Admin website address, e.g. `https://<admin>.up.railway.app/`. `media.php` downloads announcement pictures and admin profile pictures from there when they are not on the API server |
+| `UPLOAD_ROOT` (optional) | The API's `uploads` folder on a persistent volume, e.g. `/data/uploads`. Report photos and residents' profile pictures are saved there |
+| `API_PUBLIC_URL` (optional) | The API's public address, if picture links built from the request's host are wrong (e.g. behind a proxy) |
+
+### Pictures in the app
+
+The app loads announcement pictures and profile pictures through `media.php?p=uploads/...`. It serves only `uploads/announcements/`, `uploads/profile/` and `uploads/profile_pictures/`. It looks on this server first (the API folder, its parent folder, `UPLOAD_ROOT`, and on XAMPP the admin website's folder in `htdocs`), then on the admin website (`ANNOUNCEMENT_MEDIA_BASE_URL`).
+
+If the admin website keeps its uploads on a volume outside its web folder (`CS_UPLOAD_ROOT`), its pictures are only reachable through its login-protected `admin/media.php`. In that case mount the admin volume on the admin site's `uploads` folder (Railway: `/app/uploads`), as the admin README recommends, so `https://<admin>/uploads/announcements/...` works.
+
+### Staying logged in
+
+`login.php` returns a session token. The app keeps it in the phone's secure storage (Android Keystore / iOS Keychain), never the password, and checks it with `session.php` (`action=restore`) when it opens. Sessions end after 30 days without use, after a password change, or with Log Out (`session.php`, `action=logout`, which also stops push notifications to that phone).
 
 The admin panel saves report updates (`notification`) and announcements (`announcements`) without sending pushes. `push_dispatch.php?key=<PUSH_DISPATCH_SECRET>` sends a push for each new one, once, and records it in `push_sent_log`. Call it after the admin saves something, or on a schedule.
 

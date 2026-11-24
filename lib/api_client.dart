@@ -29,6 +29,10 @@ class ApiResult {
 class ApiClient {
   ApiClient._();
 
+  /// Called when the server says the saved session is no longer valid
+  /// (set in main.dart: logs out and shows Log In).
+  static void Function()? onSessionExpired;
+
   static Future<ApiResult> postForm(
     String endpoint,
     Map<String, String> fields, {
@@ -52,14 +56,17 @@ class ApiClient {
       }
 
       final bool ok = response.statusCode == 200 && body['success'] == true;
+      final bool expired =
+          response.statusCode == 401 || body['code'] == 'SESSION_EXPIRED';
+      if (expired && AuthSession.isLoggedIn) onSessionExpired?.call();
+
       return ApiResult(
         success: ok,
         message: ok
             ? (body['message']?.toString() ?? '')
             : FriendlyErrors.fromResponse(response),
         body: body,
-        sessionExpired:
-            response.statusCode == 401 || body['code'] == 'SESSION_EXPIRED',
+        sessionExpired: expired,
       );
     } catch (e) {
       debugPrint('[API] $endpoint failed: $e');
@@ -119,4 +126,25 @@ String relativeTime(DateTime? time, {DateTime? now}) {
     'Dec',
   ];
   return '${months[local.month - 1]} ${local.day}, ${local.year}';
+}
+
+/// Web address of a profile picture saved in the database (e.g.
+/// "uploads/profile/USR001_1764000000_ab12cd.jpg"), or null when there is
+/// none. Profile pictures are loaded through the API's media.php, which also
+/// finds pictures saved by the admin website (uploads/profile_pictures/...).
+String? profileImageUrl(String? path) {
+  final value = path?.trim() ?? '';
+  if (value.isEmpty || value.toLowerCase() == 'null') return null;
+
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    return value;
+  }
+
+  final clean = value.replaceFirst(RegExp(r'^(\.{0,2}/)+'), '');
+  if (clean.startsWith('uploads/profile/') ||
+      clean.startsWith('uploads/profile_pictures/')) {
+    return '$apiBaseUrl/media.php?p=${Uri.encodeQueryComponent(clean)}';
+  }
+
+  return '$serverBaseUrl/$clean';
 }

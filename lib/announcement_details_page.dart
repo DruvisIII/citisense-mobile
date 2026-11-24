@@ -439,35 +439,61 @@ class _FullScreenGalleryState extends State<_FullScreenGallery> {
 class AnnouncementComment {
   const AnnouncementComment({
     required this.id,
+    required this.parentID,
     required this.fromBarangay,
     required this.isMine,
     required this.name,
+    required this.avatar,
     required this.message,
     required this.hidden,
     required this.replyToName,
+    required this.replyToText,
+    required this.parentMissing,
     required this.createdAt,
   });
 
   final int id;
+
+  /// The comment this one replies to (0 = not a reply).
+  final int parentID;
   final bool fromBarangay;
   final bool isMine;
   final String name;
+
+  /// Current profile picture of the person who wrote it ('' = none).
+  final String avatar;
   final String message;
   final bool hidden;
   final String? replyToName;
+  final String? replyToText;
+
+  /// It answered a comment that was removed.
+  final bool parentMissing;
   final DateTime? createdAt;
 
   factory AnnouncementComment.fromJson(Map<String, dynamic> json) =>
       AnnouncementComment(
         id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
+        parentID: int.tryParse(json['parentID']?.toString() ?? '') ?? 0,
         fromBarangay: json['fromBarangay'] == true,
         isMine: json['isMine'] == true,
         name: json['name']?.toString() ?? '',
+        avatar: json['avatar']?.toString() ?? '',
         message: json['message']?.toString() ?? '',
         hidden: json['hidden'] == true,
         replyToName: json['replyToName']?.toString(),
+        replyToText: json['replyToText']?.toString(),
+        parentMissing: json['parentMissing'] == true,
         createdAt: parseApiTime(json['createdAt']),
       );
+}
+
+/// A top-level comment and every reply under it (oldest first).
+class _CommentThread {
+  _CommentThread(this.root);
+
+  final AnnouncementComment root;
+  final List<AnnouncementComment> replies = [];
 }
 
 class AnnouncementComments extends StatefulWidget {
@@ -592,8 +618,8 @@ class _AnnouncementCommentsState extends State<AnnouncementComments> {
         _error = null;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Your comment was posted.'),
+        SnackBar(
+          content: Text(result.message),
           backgroundColor: AppColors.success,
         ),
       );
@@ -697,20 +723,100 @@ class _AnnouncementCommentsState extends State<AnnouncementComments> {
       );
     }
 
+    final threads = _threads(_comments);
     return Column(
-      children: [for (final comment in _comments) _buildComment(comment)],
+      children: [
+        for (final thread in threads) ...[
+          _buildComment(thread.root, isReply: false),
+          if (thread.replies.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 22),
+              child: Container(
+                padding: const EdgeInsets.only(left: 12),
+                decoration: const BoxDecoration(
+                  border: Border(
+                    left: BorderSide(color: AppColors.primaryBorder, width: 2),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    for (final reply in thread.replies)
+                      _buildComment(reply, isReply: true),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ],
     );
   }
 
-  Widget _buildComment(AnnouncementComment c) {
+  /// Groups replies under the top-level comment they belong to, like
+  /// Facebook: a reply to a reply stays in the same thread.
+  List<_CommentThread> _threads(List<AnnouncementComment> comments) {
+    final byID = {for (final c in comments) c.id: c};
+    final threads = <int, _CommentThread>{};
+    final order = <int>[];
+
+    int rootOf(AnnouncementComment c) {
+      var current = c;
+      var guard = 0;
+      while (current.parentID != 0 &&
+          byID.containsKey(current.parentID) &&
+          guard++ < 100) {
+        current = byID[current.parentID]!;
+      }
+      return current.id;
+    }
+
+    for (final c in comments) {
+      final rootID = rootOf(c);
+      if (rootID == c.id) {
+        threads[c.id] = _CommentThread(c);
+        order.add(c.id);
+      }
+    }
+    for (final c in comments) {
+      final rootID = rootOf(c);
+      if (rootID != c.id) threads[rootID]?.replies.add(c);
+    }
+
+    return [for (final id in order) threads[id]!];
+  }
+
+  Widget _avatar(AnnouncementComment c, {required double radius}) {
     final bool official = c.fromBarangay;
-    final String initial = c.name.trim().isEmpty
-        ? '?'
-        : c.name.trim()[0].toUpperCase();
+    final Widget fallback = CircleAvatar(
+      radius: radius,
+      backgroundColor: official ? AppColors.primary : AppColors.primarySoft,
+      child: Icon(
+        official ? Icons.account_balance : Icons.person,
+        size: radius * (official ? 1.0 : 1.2),
+        color: official ? Colors.white : AppColors.primary,
+      ),
+    );
+
+    if (c.avatar.isEmpty) return fallback;
+
+    return ClipOval(
+      child: SizedBox(
+        width: radius * 2,
+        height: radius * 2,
+        child: Image.network(
+          c.avatar,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stack) => fallback,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildComment(AnnouncementComment c, {required bool isReply}) {
+    final bool official = c.fromBarangay;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
+      margin: EdgeInsets.only(bottom: isReply ? 8 : 10),
+      padding: EdgeInsets.all(isReply ? 10 : 12),
       decoration: BoxDecoration(
         color: official ? AppColors.primarySoft : AppColors.surfaceMuted,
         borderRadius: BorderRadius.circular(AppRadius.md),
@@ -721,24 +827,7 @@ class _AnnouncementCommentsState extends State<AnnouncementComments> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 17,
-            backgroundColor: official ? AppColors.primary : AppColors.border,
-            child: official
-                ? const Icon(
-                    Icons.account_balance,
-                    size: 17,
-                    color: Colors.white,
-                  )
-                : Text(
-                    initial,
-                    style: const TextStyle(
-                      fontFamily: appHeadingFontFamily,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.ink,
-                    ),
-                  ),
-          ),
+          _avatar(c, radius: isReply ? 14 : 17),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -763,22 +852,27 @@ class _AnnouncementCommentsState extends State<AnnouncementComments> {
                       _badge('Hidden by barangay', AppColors.danger),
                   ],
                 ),
-                if (c.replyToName != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    'Replying to ${c.replyToName}',
-                    style: const TextStyle(
-                      fontFamily: appFontFamily,
-                      fontSize: 11.5,
-                      color: AppColors.textMuted,
+                if (c.replyToName != null)
+                  _replyPreview(c.replyToName!, c.replyToText ?? ''),
+                if (c.parentMissing)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Text(
+                      'Replying to a comment that was removed',
+                      style: TextStyle(
+                        fontFamily: appFontFamily,
+                        fontSize: 11.5,
+                        fontStyle: FontStyle.italic,
+                        color: AppColors.textMuted,
+                      ),
                     ),
                   ),
-                ],
                 const SizedBox(height: 4),
                 Text(
                   c.message,
                   style: const TextStyle(
                     fontFamily: appFontFamily,
+                    fontFamilyFallback: emojiFontFallback,
                     fontSize: 13.5,
                     height: 1.45,
                     color: AppColors.ink,
@@ -823,6 +917,61 @@ class _AnnouncementCommentsState extends State<AnnouncementComments> {
     );
   }
 
+  /// "↪ Replying to Name" and the first words of that comment.
+  Widget _replyPreview(String name, String text) {
+    return Container(
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(8),
+        border: const Border(
+          left: BorderSide(color: AppColors.primary, width: 3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.subdirectory_arrow_right_rounded,
+                size: 13,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 3),
+              Flexible(
+                child: Text(
+                  'Replying to $name',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: appHeadingFontFamily,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (text.isNotEmpty)
+            Text(
+              text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: appFontFamily,
+                fontFamilyFallback: emojiFontFallback,
+                fontSize: 11.5,
+                color: AppColors.textSecondary,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _badge(String label, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -854,17 +1003,7 @@ class _AnnouncementCommentsState extends State<AnnouncementComments> {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
-                    'Replying to ${_replyingTo!.fromBarangay ? 'Barangay' : _replyingTo!.name}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontFamily: appHeadingFontFamily,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
-                    ),
-                  ),
+                  child: _replyPreview(_replyingTo!.name, _replyingTo!.message),
                 ),
                 InkWell(
                   onTap: () => setState(() => _replyingTo = null),
@@ -890,9 +1029,15 @@ class _AnnouncementCommentsState extends State<AnnouncementComments> {
                 maxLines: 4,
                 maxLength: _maxLength,
                 textCapitalization: TextCapitalization.sentences,
-                style: const TextStyle(fontFamily: appFontFamily, fontSize: 14),
-                decoration: const InputDecoration(
-                  hintText: 'Write a comment…',
+                style: const TextStyle(
+                  fontFamily: appFontFamily,
+                  fontFamilyFallback: emojiFontFallback,
+                  fontSize: 14,
+                ),
+                decoration: InputDecoration(
+                  hintText: _replyingTo != null
+                      ? 'Write a reply…'
+                      : 'Write a comment…',
                   counterText: '',
                   isDense: true,
                 ),

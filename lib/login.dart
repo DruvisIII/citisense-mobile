@@ -11,7 +11,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:citisense/auth_session.dart';
 import 'package:citisense/createAccount.dart';
 import 'package:citisense/friendly_errors.dart';
-import 'package:citisense/home.dart';
+import 'package:citisense/landing.dart';
+import 'package:citisense/session_manager.dart';
 import 'package:citisense/forgot_password_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -233,28 +234,23 @@ class _LoginPageState extends State<LoginPage> {
       // --------------------------------------------------------
 
       // Session token for messages, comments and notifications.
-      AuthSession.start(decoded['authToken']?.toString());
+      final String authToken = decoded['authToken']?.toString().trim() ?? '';
 
       final dynamic userData = decoded['user'];
 
-      if (userData == null || userData is! Map) {
+      if (userData == null || userData is! Map || authToken.isEmpty) {
         throw Exception('Invalid user data received from server.');
       }
 
-      final String? userID = userData['userID']?.toString();
-      final String? firstName = userData['firstName']?.toString();
-      final String? lastName = userData['lastName']?.toString();
-      final String? userEmail = userData['email']?.toString();
-      final String? contactNo = userData['contactNo']?.toString();
-      final String? profilePic = userData['profilePic']?.toString();
-      final String? barangayID = userData['barangayID']?.toString();
+      final SessionUser sessionUser = SessionUser.fromJson(
+        Map<String, dynamic>.from(userData),
+      ).copyWith(email: userData['email']?.toString() ?? email);
 
       // --------------------------------------------------------
       // CHECK WHETHER BARANGAY EXISTS
       // --------------------------------------------------------
 
-      final bool hasBarangay =
-          barangayID != null && barangayID.isNotEmpty && barangayID != 'null';
+      final bool hasBarangay = sessionUser.hasBarangay;
 
       if (!mounted) return;
 
@@ -278,6 +274,7 @@ class _LoginPageState extends State<LoginPage> {
       // --------------------------------------------------------
 
       if (!hasBarangay) {
+        AuthSession.start(null);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -292,23 +289,15 @@ class _LoginPageState extends State<LoginPage> {
 
       // --------------------------------------------------------
       // USER ALREADY HAS BARANGAY
-      // GO TO HOME
+      // Keep the session on this phone (stays logged in until Log Out),
+      // then open Home with nothing behind it, so the back button never
+      // returns to this page.
       // --------------------------------------------------------
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => HomePage(
-            userID: userID ?? '',
-            firstName: firstName ?? '',
-            lastName: lastName ?? '',
-            email: userEmail ?? email,
-            contactNo: contactNo ?? '',
-            profilePic: profilePic,
-            barangayID: barangayID ?? '',
-          ),
-        ),
-      );
+      await AuthSession.save(authToken, sessionUser);
+
+      if (!mounted) return;
+      SessionManager.openHome(context, sessionUser);
     } catch (e) {
       // --------------------------------------------------------
       // OTHER ERRORS
@@ -348,7 +337,16 @@ class _LoginPageState extends State<LoginPage> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 20),
           onPressed: () {
-            Navigator.pop(context);
+            // After Log Out this is the only page: go to the welcome page
+            // instead of closing the app with an empty screen.
+            if (Navigator.of(context).canPop()) {
+              Navigator.pop(context);
+            } else {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const LandingPage()),
+              );
+            }
           },
         ),
       ),
@@ -517,34 +515,39 @@ class _LoginPageState extends State<LoginPage> {
               // ------------------------------------------------
               // SIGN UP
               // ------------------------------------------------
-              Wrap(
-                alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  const Text(
-                    "Don't have an account? ",
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontFamily: appFontFamily,
-                      color: AppColors.textSecondary,
+              // Full width so the text is centered on the page (the column
+              // aligns its children to the left).
+              SizedBox(
+                width: double.infinity,
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    const Text(
+                      "Don't have an account? ",
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontFamily: appFontFamily,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
-                  ),
-                  GestureDetector(
-                    onTap: _isLoading
-                        ? null
-                        : () {
-                            // Replace Log In with Create Account so going
-                            // back between them never stacks pages.
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const CreateAccount(),
-                              ),
-                            );
-                          },
-                    child: const Text('Sign Up', style: AppText.link),
-                  ),
-                ],
+                    GestureDetector(
+                      onTap: _isLoading
+                          ? null
+                          : () {
+                              // Replace Log In with Create Account so going
+                              // back between them never stacks pages.
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const CreateAccount(),
+                                ),
+                              );
+                            },
+                      child: const Text('Sign Up', style: AppText.link),
+                    ),
+                  ],
+                ),
               ),
 
               const SizedBox(height: 32),

@@ -1,6 +1,6 @@
 <?php
 
-header("Content-Type: application/json");
+header("Content-Type: application/json; charset=utf-8");
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Accept");
@@ -126,18 +126,12 @@ try {
 
     /*
      * Pictures the admin attached (announcement_images table).
-     * The admin website saves them, so their web address starts with
-     * the admin site's address: ANNOUNCEMENT_MEDIA_BASE_URL, e.g.
-     * https://citisense-admin.up.railway.app/
+     * They are saved by the admin website, so the app loads them
+     * through media.php, which finds the file on this server or
+     * downloads it from the admin website (ANNOUNCEMENT_MEDIA_BASE_URL).
      */
     if ($announcements) {
-        $mediaBase = trim((string) getenv("ANNOUNCEMENT_MEDIA_BASE_URL"));
-        if ($mediaBase === "") {
-            $scheme = (!empty($_SERVER["HTTPS"]) && $_SERVER["HTTPS"] !== "off")
-                || (($_SERVER["HTTP_X_FORWARDED_PROTO"] ?? "") === "https") ? "https" : "http";
-            $mediaBase = $scheme . "://" . ($_SERVER["HTTP_HOST"] ?? "localhost") . "/";
-        }
-        $mediaBase = rtrim($mediaBase, "/") . "/";
+        require_once __DIR__ . "/media_common.php";
 
         $indexByID = [];
         foreach ($announcements as $i => $announcement) {
@@ -165,9 +159,11 @@ try {
                         continue;
                     }
 
-                    $url = preg_match('~^https?://~i', $path)
-                        ? $path
-                        : $mediaBase . implode("/", array_map("rawurlencode", explode("/", ltrim($path, "/"))));
+                    $url = citisense_media_url($path);
+                    if ($url === "") {
+                        error_log("CitiSense announcement image skipped (unexpected path): " . $path);
+                        continue;
+                    }
 
                     $i = $indexByID[(string) $image["announceID"]] ?? null;
                     if ($i !== null) {

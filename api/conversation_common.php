@@ -21,6 +21,72 @@ function conversation_load_user(mysqli $conn, string $userID): ?array
     return $row ?: null;
 }
 
+/**
+ * Makes sure these tables store 4-byte characters (emoji). Tables imported
+ * from an older export can still use utf8 (3 bytes), which turns 😀 into
+ * "?" or rejects the message. Checked once per request, converted once.
+ */
+function conversation_ensure_utf8mb4(mysqli $conn, array $tables): void
+{
+    static $checked = [];
+
+    foreach ($tables as $table) {
+        if (isset($checked[$table]) || !preg_match('/^[a-z_]+$/', $table)) {
+            continue;
+        }
+        $checked[$table] = true;
+
+        try {
+            $stmt = $conn->prepare(
+                "SELECT COUNT(*) AS total FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+                   AND CHARACTER_SET_NAME IS NOT NULL AND CHARACTER_SET_NAME <> 'utf8mb4'"
+            );
+            $stmt->bind_param('s', $table);
+            $stmt->execute();
+            $notUtf8mb4 = (int) ($stmt->get_result()->fetch_assoc()['total'] ?? 0);
+            $stmt->close();
+
+            if ($notUtf8mb4 > 0) {
+                // Keep the collation family the admin website joins with.
+                $collation = $table === 'resident_messages' ? 'utf8mb4_unicode_ci' : 'utf8mb4_general_ci';
+                $conn->query("ALTER TABLE `$table` CONVERT TO CHARACTER SET utf8mb4 COLLATE $collation");
+                error_log("CitiSense: converted $table to utf8mb4 so emoji are saved correctly.");
+            }
+        } catch (Throwable $e) {
+            error_log("CitiSense: could not check/convert $table to utf8mb4: " . $e->getMessage());
+        }
+    }
+}
+
+/** Profile picture paths for a list of userIDs: [userID => path]. */
+function conversation_user_pictures(mysqli $conn, array $userIDs): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('strval', $userIDs), 'strlen')));
+    if (!$ids) {
+        return [];
+    }
+
+    $pictures = [];
+    $stmt = $conn->prepare('SELECT profilePic FROM users WHERE userID = ? LIMIT 1');
+    foreach ($ids as $id) {
+        $stmt->bind_param('s', $id);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $pictures[$id] = trim((string) ($row['profilePic'] ?? ''));
+    }
+    $stmt->close();
+
+    return $pictures;
+}
+
+/** Short one-line preview of a message for a "replying to" quote. */
+function conversation_preview(string $text, int $width = 90): string
+{
+    $text = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
+    return mb_strimwidth($text, 0, $width, '…');
+}
+
 /** Full names for a list of userIDs: [userID => "First Last"]. */
 function conversation_user_names(mysqli $conn, array $userIDs): array
 {
@@ -51,7 +117,13 @@ function conversation_user_names(mysqli $conn, array $userIDs): array
 function conversation_clean_text(string $text): string
 {
     $text = str_replace(["\r\n", "\r"], "\n", $text);
-    $text = preg_replace('/[^\P{C}\n\t]/u', '', $text) ?? '';
+    // Invalid UTF-8 would make the patterns below return null.
+    if (!mb_check_encoding($text, 'UTF-8')) {
+        $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+    }
+    // Keeps the zero-width joiner (U+200D) and variation selectors that
+    // emoji such as 👨‍👩‍👧 and ❤️ are built from.
+    $text = preg_replace('/(?![\x{200C}\x{200D}\x{FE0E}\x{FE0F}])[^\P{C}\n\t]/u', '', $text) ?? '';
     $text = preg_replace("/\n{3,}/", "\n\n", $text) ?? '';
     return trim($text);
 }

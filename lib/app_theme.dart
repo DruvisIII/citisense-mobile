@@ -17,6 +17,17 @@ const String appFontFamily = 'Quicksand';
 /// Nunito: free from Google Fonts (SIL Open Font License).
 const String appHeadingFontFamily = 'Nunito';
 
+/// Fonts to fall back to for emoji, which Quicksand and Nunito do not
+/// include. Android, iOS, Windows and other systems each provide one of
+/// these, so 😀 shows as a picture instead of an empty box.
+const List<String> emojiFontFallback = [
+  'Noto Color Emoji',
+  'NotoColorEmoji',
+  'Apple Color Emoji',
+  'Segoe UI Emoji',
+  'Segoe UI Symbol',
+];
+
 class AppColors {
   AppColors._();
 
@@ -150,32 +161,45 @@ class AppTheme {
       bodyColor: AppColors.ink,
       displayColor: AppColors.ink,
     );
-    return body.copyWith(
-      displayLarge: heading.displayLarge,
-      displayMedium: heading.displayMedium,
-      displaySmall: heading.displaySmall,
-      headlineLarge: heading.headlineLarge,
-      headlineMedium: heading.headlineMedium,
-      headlineSmall: heading.headlineSmall,
-      titleLarge: heading.titleLarge,
-      titleMedium: heading.titleMedium,
-      titleSmall: heading.titleSmall,
+    return _withEmoji(body).copyWith(
+      displayLarge: _emoji(heading.displayLarge),
+      displayMedium: _emoji(heading.displayMedium),
+      displaySmall: _emoji(heading.displaySmall),
+      headlineLarge: _emoji(heading.headlineLarge),
+      headlineMedium: _emoji(heading.headlineMedium),
+      headlineSmall: _emoji(heading.headlineSmall),
+      titleLarge: _emoji(heading.titleLarge),
+      titleMedium: _emoji(heading.titleMedium),
+      titleSmall: _emoji(heading.titleSmall),
     );
   }
 
+  static TextStyle? _emoji(TextStyle? style) =>
+      style?.copyWith(fontFamilyFallback: emojiFontFallback);
+
+  static TextTheme _withEmoji(TextTheme t) => t.copyWith(
+    bodyLarge: _emoji(t.bodyLarge),
+    bodyMedium: _emoji(t.bodyMedium),
+    bodySmall: _emoji(t.bodySmall),
+    labelLarge: _emoji(t.labelLarge),
+    labelMedium: _emoji(t.labelMedium),
+    labelSmall: _emoji(t.labelSmall),
+  );
+
   static ThemeData get light {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.primary,
-      brightness: Brightness.light,
-    ).copyWith(
-      primary: AppColors.primary,
-      onPrimary: Colors.white,
-      secondary: AppColors.primary,
-      error: AppColors.danger,
-      surface: AppColors.surface,
-      onSurface: AppColors.ink,
-      outline: AppColors.border,
-    );
+    final colorScheme =
+        ColorScheme.fromSeed(
+          seedColor: AppColors.primary,
+          brightness: Brightness.light,
+        ).copyWith(
+          primary: AppColors.primary,
+          onPrimary: Colors.white,
+          secondary: AppColors.primary,
+          error: AppColors.danger,
+          surface: AppColors.surface,
+          onSurface: AppColors.ink,
+          outline: AppColors.border,
+        );
 
     final base = ThemeData(
       useMaterial3: true,

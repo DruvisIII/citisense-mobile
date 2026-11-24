@@ -6,6 +6,7 @@ import 'package:citisense/api_config.dart';
 import 'package:citisense/auth_session.dart';
 import 'package:citisense/friendly_errors.dart';
 import 'package:citisense/app_theme.dart';
+import 'package:citisense/barangay_messages_page.dart';
 import 'package:citisense/live_updates.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -17,12 +18,13 @@ import 'package:http/http.dart' as http;
 //   1. "Rate the Resolution" - after the report is resolved
 //      (STAT003) the resident confirms it is fixed and rates
 //      how the barangay handled it.
-//   2. "Updates & Messages" - the barangay's status updates and
-//      a two-way conversation about the report.
+//   2. "Updates" - the barangay's status updates for the report.
+//      Questions about a report are asked in "Message your
+//      barangay" (barangay_messages_page.dart), where the resident
+//      picks the report; a button here opens it for this report.
 //
 // Server endpoints (api/):
 //   get_report_thread.php       POST userID, reportID
-//   send_report_message.php     POST userID, reportID, message
 //   submit_report_feedback.php  POST userID, reportID, isFixed, rating, comment
 // ============================================================
 
@@ -123,27 +125,6 @@ class ReportEngagementApi {
     }
   }
 
-  static Future<EngagementResult<void>> sendMessage({
-    required String userID,
-    required String reportID,
-    required String message,
-  }) async {
-    try {
-      final d = await _post('send_report_message.php', {
-        'userID': userID,
-        'reportID': reportID,
-        'message': message,
-      });
-      return EngagementResult(
-        d['_ok'] == true,
-        d['message']?.toString() ?? 'Failed to send your message.',
-      );
-    } catch (e) {
-      debugPrint('Send message error: $e');
-      return EngagementResult(false, FriendlyErrors.fromException(e));
-    }
-  }
-
   static Future<EngagementResult<void>> submitFeedback({
     required String userID,
     required String reportID,
@@ -208,10 +189,6 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
   final TextEditingController _feedbackComment = TextEditingController();
   bool _savingFeedback = false;
 
-  // Composer
-  final TextEditingController _messageController = TextEditingController();
-  bool _sending = false;
-
   @override
   void initState() {
     super.initState();
@@ -221,14 +198,13 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
   }
 
   void _onLiveUpdate() {
-    if (mounted && !_sending && !_savingFeedback) _load(silent: true);
+    if (mounted && !_savingFeedback) _load(silent: true);
   }
 
   @override
   void dispose() {
     LiveUpdates.instance.changes.removeListener(_onLiveUpdate);
     _feedbackComment.dispose();
-    _messageController.dispose();
     super.dispose();
   }
 
@@ -253,7 +229,7 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
       setState(() {
         _loading = false;
         _loadError = result.message.isEmpty
-            ? 'Unable to load messages.'
+            ? 'Unable to load updates.'
             : result.message;
       });
       return;
@@ -321,34 +297,6 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
   }
 
   // ------------------------------------------------------------
-  // MESSAGES
-  // ------------------------------------------------------------
-
-  Future<void> _send() async {
-    final text = _messageController.text.trim();
-    if (text.isEmpty || _sending) return;
-
-    setState(() => _sending = true);
-
-    final result = await ReportEngagementApi.sendMessage(
-      userID: widget.userID,
-      reportID: widget.reportID,
-      message: text,
-    );
-
-    if (!mounted) return;
-    setState(() => _sending = false);
-
-    if (result.success) {
-      _messageController.clear();
-      FocusScope.of(context).unfocus();
-      await _load();
-    } else {
-      _toast(result.message);
-    }
-  }
-
-  // ------------------------------------------------------------
   // BUILD
   // ------------------------------------------------------------
 
@@ -371,8 +319,8 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
           children: [
             Expanded(
               child: _sectionTitle(
-                'Updates & Messages',
-                'Reply to your barangay or add more details.',
+                'Updates',
+                'Status changes and updates from your barangay.',
               ),
             ),
             IconButton(
@@ -384,8 +332,23 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
         ),
         const SizedBox(height: 12),
         _buildThread(),
-        const SizedBox(height: 12),
-        _buildComposer(),
+        const SizedBox(height: 10),
+        // Questions about this report are asked in Messages.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => BarangayMessagesPage(
+                  userID: widget.userID,
+                  initialReportID: widget.reportID,
+                ),
+              ),
+            ),
+            icon: const Icon(Icons.forum_outlined, size: 18),
+            label: const Text('Ask your barangay about this report'),
+          ),
+        ),
       ],
     );
   }
@@ -789,22 +752,18 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
       ),
     );
 
-    for (final item in _items) {
-      if (item.type == 'system') {
-        rows.add(
-          _systemRow(item.message, item.createdAt, Icons.update_rounded),
-        );
-      } else {
-        rows.add(_bubble(item));
-      }
+    // Only status updates; messages are in "Message your barangay".
+    final updates = _items.where((i) => i.type == 'system').toList();
+    for (final item in updates) {
+      rows.add(_systemRow(item.message, item.createdAt, Icons.update_rounded));
     }
 
-    if (_items.where((i) => i.type != 'system').isEmpty) {
+    if (updates.isEmpty) {
       rows.add(
         const Padding(
           padding: EdgeInsets.only(top: 6),
           child: Text(
-            'No messages yet. Ask a question or add details for your barangay.',
+            'No updates yet. You will see status changes from your barangay here.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: appFontFamily,
@@ -871,119 +830,6 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _bubble(ThreadItem item) {
-    final bool mine = item.type == 'resident';
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Align(
-        alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.68,
-          ),
-          child: Column(
-            crossAxisAlignment: mine
-                ? CrossAxisAlignment.end
-                : CrossAxisAlignment.start,
-            children: [
-              Text(
-                mine ? 'You' : 'Barangay',
-                style: TextStyle(
-                  fontFamily: appHeadingFontFamily,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: mine ? AppColors.textSecondary : AppColors.primary,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 13,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: mine ? AppColors.primary : Colors.white,
-                  border: mine ? null : Border.all(color: AppColors.border),
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(16),
-                    topRight: const Radius.circular(16),
-                    bottomLeft: Radius.circular(mine ? 16 : 4),
-                    bottomRight: Radius.circular(mine ? 4 : 16),
-                  ),
-                ),
-                child: Text(
-                  item.message,
-                  style: TextStyle(
-                    fontFamily: appFontFamily,
-                    fontSize: 13,
-                    height: 1.45,
-                    color: mine ? Colors.white : AppColors.ink,
-                  ),
-                ),
-              ),
-              if (item.createdAt != null) ...[
-                const SizedBox(height: 3),
-                Text(
-                  _formatStamp(item.createdAt!),
-                  style: const TextStyle(
-                    fontFamily: appFontFamily,
-                    fontSize: 10,
-                    color: AppColors.textMuted,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildComposer() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(
-          child: TextField(
-            controller: _messageController,
-            minLines: 1,
-            maxLines: 4,
-            maxLength: 500,
-            textCapitalization: TextCapitalization.sentences,
-            style: const TextStyle(fontFamily: appFontFamily, fontSize: 14),
-            decoration: const InputDecoration(
-              hintText: 'Write a message to your barangay...',
-              counterText: '',
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        SizedBox(
-          width: 50,
-          height: 50,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              padding: EdgeInsets.zero,
-              minimumSize: const Size(50, 50),
-            ),
-            onPressed: _sending ? null : _send,
-            child: _sending
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.4,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.send_rounded, size: 22),
-          ),
-        ),
-      ],
     );
   }
 

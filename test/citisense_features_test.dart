@@ -398,9 +398,10 @@ void main() {
       },
       {
         'id': 2,
+        'parentID': 1,
         'fromBarangay': true,
         'isMine': false,
-        'name': 'Maria Santos · Barangay',
+        'name': 'Maria Santos',
         'message': 'Yes, gloves provided.',
         'hidden': false,
         'replyToName': 'Ana Reyes',
@@ -535,6 +536,113 @@ void main() {
     );
 
     // Stop the 10-second refresh timer.
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('Messages: ask about a report, reply, delete own message', (
+    tester,
+  ) async {
+    await setPhone(tester);
+    final now = DateTime.now().toUtc().toIso8601String();
+    final messages = <Map<String, dynamic>>[
+      {
+        'key': 'r1',
+        'fromBarangay': true,
+        'canDelete': false,
+        'name': 'Maria Santos',
+        'message': 'We will check REP055 today 😊',
+        'reportID': 'REP055',
+        'reportLabel': 'REP055 · Waste Accumulation',
+        'replyTo': null,
+        'createdAt': now,
+      },
+    ];
+    final sent = <Map<String, String>>[];
+
+    await http.runWithClient(
+      () async {
+        await tester.pumpWidget(
+          app(const BarangayMessagesPage(userID: 'USR001')),
+        );
+        await tester.pump(const Duration(milliseconds: 300));
+
+        // The report the message is about is shown on the message.
+        expect(find.text('REP055 · Waste Accumulation'), findsOneWidget);
+        expect(find.text('General message'), findsOneWidget);
+        // The barangay's message cannot be deleted.
+        expect(find.text('Delete'), findsNothing);
+
+        // Reply to the barangay's message.
+        await tester.tap(find.text('Reply'));
+        await tester.pump();
+        expect(find.text('Replying to Maria Santos'), findsOneWidget);
+        await tester.enterText(find.byType(TextField), 'Salamat po! 🙏');
+        await tester.pump();
+        await tester.tap(find.byTooltip('Send'));
+        await tester.pump(const Duration(milliseconds: 300));
+
+        expect(sent.last['replyTo'], 'r1');
+        // A reply stays with the report of the message it answers.
+        expect(sent.last['reportID'], 'REP055');
+        expect(find.text('Salamat po! 🙏'), findsOneWidget);
+        expect(
+          find.text('Replying to Maria Santos · Barangay'),
+          findsOneWidget,
+        );
+
+        // Delete my own message (only mine has Delete).
+        expect(find.text('Delete'), findsOneWidget);
+        await tester.tap(find.text('Delete'));
+        await tester.pump();
+        await tester.tap(find.widgetWithText(TextButton, 'Delete'));
+        await tester.pump(const Duration(milliseconds: 300));
+
+        expect(sent.last['action'], 'delete');
+        expect(sent.last['key'], 'r2');
+        expect(find.text('Salamat po! 🙏'), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+      () => MockClient((request) async {
+        final fields = Uri.splitQueryString(request.body);
+        if (fields['action'] != 'list') sent.add(fields);
+        if (fields['action'] == 'send') {
+          messages.add({
+            'key': 'r2',
+            'fromBarangay': false,
+            'canDelete': true,
+            'name': 'You',
+            'message': fields['message'],
+            'reportID': fields['reportID'] ?? '',
+            'reportLabel': 'REP055 · Waste Accumulation',
+            'replyTo': {
+              'key': 'r1',
+              'name': 'Maria Santos · Barangay',
+              'text': 'We will check REP055 today 😊',
+              'missing': false,
+            },
+            'createdAt': now,
+          });
+        }
+        if (fields['action'] == 'delete') {
+          messages.removeWhere((m) => m['key'] == fields['key']);
+        }
+        return json({
+          'success': true,
+          'barangayName': 'Lahug',
+          'data': messages,
+          'reports': [
+            {
+              'reportID': 'REP055',
+              'categoryName': 'Waste Accumulation',
+              'statusName': 'Resolved',
+              'imagePath': '',
+              'dateReported': now,
+            },
+          ],
+        });
+      }),
+    );
+
     await tester.pumpWidget(const SizedBox());
   });
 

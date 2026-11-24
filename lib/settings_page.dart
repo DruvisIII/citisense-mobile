@@ -7,11 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:citisense/api_client.dart';
 import 'package:citisense/auth_session.dart';
+import 'package:citisense/session_manager.dart';
 import 'package:citisense/change_password_page.dart';
 import 'package:citisense/friendly_errors.dart';
 import 'package:citisense/validators.dart';
 import 'package:citisense/app_theme.dart';
-import 'package:citisense/live_updates.dart';
 import 'package:citisense/mascot.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -31,6 +31,9 @@ class SettingsPage extends StatefulWidget {
   final String? profilePic;
   final String barangayID;
 
+  /// Tells Home about saved personal details (name, picture, ...).
+  final ValueChanged<Map<String, dynamic>>? onProfileUpdated;
+
   const SettingsPage({
     super.key,
     required this.userID,
@@ -40,6 +43,7 @@ class SettingsPage extends StatefulWidget {
     required this.contactNo,
     this.profilePic,
     required this.barangayID,
+    this.onProfileUpdated,
   });
 
   @override
@@ -82,27 +86,29 @@ class _SettingsPageState extends State<SettingsPage> {
     _profilePic = widget.profilePic;
   }
 
+  @override
+  void didUpdateWidget(covariant SettingsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Home refreshed the profile from the server (e.g. a new picture).
+    if (widget.profilePic != oldWidget.profilePic &&
+        (widget.profilePic ?? '').isNotEmpty) {
+      _profilePic = widget.profilePic;
+    }
+    if (widget.firstName != oldWidget.firstName) _firstName = widget.firstName;
+    if (widget.lastName != oldWidget.lastName) _lastName = widget.lastName;
+    if (widget.email != oldWidget.email) _email = widget.email;
+    if (widget.contactNo != oldWidget.contactNo) _contactNo = widget.contactNo;
+    if (widget.barangayID != oldWidget.barangayID) {
+      _barangayID = widget.barangayID;
+    }
+  }
+
   String get _fullName {
     return '$_firstName $_lastName'.trim();
   }
 
-  String? _getProfileImageUrl(String? profilePic) {
-    final value = profilePic?.trim();
-
-    if (value == null || value.isEmpty) {
-      return null;
-    }
-
-    if (value.startsWith('http://') || value.startsWith('https://')) {
-      return value;
-    }
-
-    if (value.startsWith('/')) {
-      return '$serverBaseUrl$value';
-    }
-
-    return '$serverBaseUrl/$value';
-  }
+  String? _getProfileImageUrl(String? profilePic) =>
+      profileImageUrl(profilePic);
 
   Future<void> _openPersonalDetails() async {
     final result = await Navigator.push(
@@ -129,6 +135,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _barangayID = result['barangayID'] ?? _barangayID;
         _profilePic = result['profilePic'] ?? _profilePic;
       });
+      widget.onProfileUpdated?.call(result);
     }
   }
 
@@ -807,10 +814,9 @@ class _SettingsPageState extends State<SettingsPage> {
       },
     ).then((confirmed) {
       if (confirmed == true && mounted) {
-        // Stop automatic refreshing and end the session.
-        LiveUpdates.instance.stop();
-        AuthSession.clear();
-        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+        // Ends the session on the server and on this phone, then shows
+        // Log In with nothing behind it.
+        SessionManager.logout();
       }
     });
   }
@@ -941,23 +947,8 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
     }
   }
 
-  String? _getProfileImageUrl(String? profilePic) {
-    final value = profilePic?.trim();
-
-    if (value == null || value.isEmpty) {
-      return null;
-    }
-
-    if (value.startsWith('http://') || value.startsWith('https://')) {
-      return value;
-    }
-
-    if (value.startsWith('/')) {
-      return '$serverBaseUrl$value';
-    }
-
-    return '$serverBaseUrl/$value';
-  }
+  String? _getProfileImageUrl(String? profilePic) =>
+      profileImageUrl(profilePic);
 
   Future<void> _changeProfilePicture() async {
     if (!_isEditing) {
@@ -1167,6 +1158,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
           Uri.parse('$baseUrl/update_profile.php'),
         );
 
+        request.headers.addAll(AuthSession.headers());
         request.fields['userID'] = widget.userID;
         request.fields['firstName'] = firstName;
         request.fields['lastName'] = lastName;
@@ -1191,10 +1183,9 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
       else {
         response = await http.post(
           Uri.parse('$baseUrl/update_profile.php'),
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Accept': 'application/json',
-          },
+          headers: AuthSession.headers(
+            extra: {'Content-Type': 'application/x-www-form-urlencoded'},
+          ),
           body: {
             'userID': widget.userID,
             'firstName': firstName,
@@ -1228,7 +1219,41 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
 
       final updatedProfilePic = updatedUser['profilePic'] ?? _profilePic;
 
+      // A new picture: check that the saved file can really be loaded
+      // before saying it worked.
+      bool pictureLoaded = true;
+      if (_selectedImage != null) {
+        final newUrl = _getProfileImageUrl(updatedProfilePic?.toString());
+        final oldUrl = _getProfileImageUrl(widget.profilePic);
+        if (oldUrl != null) {
+          // Never show the previous picture from the cache again.
+          await NetworkImage(oldUrl).evict();
+        }
+        pictureLoaded =
+            newUrl != null &&
+            updatedProfilePic?.toString() != widget.profilePic &&
+            mounted &&
+            await _canLoadImage(newUrl);
+      }
+
       if (!mounted) {
+        return;
+      }
+
+      if (!pictureLoaded) {
+        setState(() {
+          _isSaving = false;
+          _profilePic = updatedProfilePic?.toString();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Your details were saved, but the new profile picture could '
+              'not be loaded. Please check your connection and try again.',
+            ),
+            backgroundColor: AppColors.danger,
+          ),
+        );
         return;
       }
 
@@ -1271,6 +1296,32 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
         ),
       );
     }
+  }
+
+  /// True when the picture at [url] downloads and decodes.
+  Future<bool> _canLoadImage(String url) async {
+    final completer = Completer<bool>();
+    final stream = NetworkImage(url).resolve(ImageConfiguration.empty);
+    late final ImageStreamListener listener;
+    listener = ImageStreamListener(
+      (image, synchronousCall) {
+        if (!completer.isCompleted) completer.complete(true);
+        stream.removeListener(listener);
+      },
+      onError: (error, stackTrace) {
+        debugPrint('New profile picture could not be loaded: $error');
+        if (!completer.isCompleted) completer.complete(false);
+        stream.removeListener(listener);
+      },
+    );
+    stream.addListener(listener);
+    return completer.future.timeout(
+      const Duration(seconds: 20),
+      onTimeout: () {
+        stream.removeListener(listener);
+        return false;
+      },
+    );
   }
 
   // Sends a code to the new email (the server rejects emails that are
