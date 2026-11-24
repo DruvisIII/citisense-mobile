@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:citisense/api_client.dart';
 import 'package:citisense/api_config.dart';
+import 'package:citisense/auth_session.dart';
+import 'package:citisense/friendly_errors.dart';
 import 'package:citisense/app_theme.dart';
 import 'package:citisense/live_updates.dart';
 import 'package:flutter/material.dart';
@@ -40,9 +43,7 @@ class ThreadItem {
   factory ThreadItem.fromJson(Map<String, dynamic> json) => ThreadItem(
     type: json['type']?.toString() ?? 'system',
     message: json['message']?.toString() ?? '',
-    createdAt: DateTime.tryParse(
-      (json['createdAt']?.toString() ?? '').replaceFirst(' ', 'T'),
-    ),
+    createdAt: parseApiTime(json['createdAt']),
   );
 }
 
@@ -82,16 +83,23 @@ class ReportEngagementApi {
     final response = await http
         .post(
           Uri.parse('$_apiUrl/$endpoint'),
-          headers: {'Accept': 'application/json'},
+          headers: AuthSession.headers(),
           body: body,
         )
         .timeout(const Duration(seconds: 25));
 
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Unexpected server response.');
+    Map<String, dynamic> decoded;
+    try {
+      final body = jsonDecode(response.body);
+      decoded = body is Map<String, dynamic> ? body : <String, dynamic>{};
+    } on FormatException {
+      decoded = <String, dynamic>{};
     }
     decoded['_ok'] = response.statusCode == 200 && decoded['success'] == true;
+    if (decoded['_ok'] != true) {
+      // Replace technical or missing messages with plain language.
+      decoded['message'] = FriendlyErrors.fromResponse(response);
+    }
     return decoded;
   }
 
@@ -111,10 +119,7 @@ class ReportEngagementApi {
       );
     } catch (e) {
       debugPrint('Load thread error: $e');
-      return const EngagementResult(
-        false,
-        'Unable to load messages. Check your connection.',
-      );
+      return EngagementResult(false, FriendlyErrors.fromException(e));
     }
   }
 
@@ -135,10 +140,7 @@ class ReportEngagementApi {
       );
     } catch (e) {
       debugPrint('Send message error: $e');
-      return const EngagementResult(
-        false,
-        'Unable to send your message. Check your connection.',
-      );
+      return EngagementResult(false, FriendlyErrors.fromException(e));
     }
   }
 
@@ -163,10 +165,7 @@ class ReportEngagementApi {
       );
     } catch (e) {
       debugPrint('Submit feedback error: $e');
-      return const EngagementResult(
-        false,
-        'Unable to send your feedback. Check your connection.',
-      );
+      return EngagementResult(false, FriendlyErrors.fromException(e));
     }
   }
 }

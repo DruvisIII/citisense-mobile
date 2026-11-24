@@ -12,6 +12,7 @@ if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
 }
 
 require_once "config.php";
+require_once __DIR__ . "/validation.php";
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
@@ -59,25 +60,19 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 }
 
 // Validate password
-if (strlen($password) < 6) {
-    respond(false, "Password must be at least 6 characters.");
+$passwordError = citisense_password_error($password);
+if ($passwordError !== null) {
+    respond(false, $passwordError);
 }
 
-// Normalize Philippine mobile number
-$digits = preg_replace('/\D/', '', $contactNo);
+// Validate and normalize the Philippine mobile number (stored as 09XXXXXXXXX)
+$normalizedContact = citisense_normalize_ph_mobile($contactNo);
 
-if (substr($digits, 0, 2) === "63") {
-    $digits = "0" . substr($digits, 2);
+if ($normalizedContact === null) {
+    respond(false, CITISENSE_PHONE_ERROR);
 }
 
-if (!preg_match('/^09[0-9]{9}$/', $digits)) {
-    respond(
-        false,
-        "Please enter a valid Philippine mobile number (09XXXXXXXXX)."
-    );
-}
-
-$contactNo = $digits;
+$contactNo = $normalizedContact;
 
 // Validate registration token format
 if (!preg_match('/^[a-f0-9]{64}$/', $registrationToken)) {

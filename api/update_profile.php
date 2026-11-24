@@ -124,6 +124,23 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 
 /*
 |--------------------------------------------------------------------------
+| Validate Philippine mobile number (stored as 09XXXXXXXXX)
+|--------------------------------------------------------------------------
+*/
+
+require_once __DIR__ . "/validation.php";
+
+$normalizedContact = citisense_normalize_ph_mobile($contactNo);
+
+if ($normalizedContact === null) {
+    sendResponse(false, CITISENSE_PHONE_ERROR, null, 400);
+}
+
+$contactNo = $normalizedContact;
+
+
+/*
+|--------------------------------------------------------------------------
 | Check if user exists
 |--------------------------------------------------------------------------
 */

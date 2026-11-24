@@ -358,6 +358,33 @@ $stmt->close();
 
 
 // ============================================================
+// "OTHERS" NEEDS A DESCRIPTION
+// The category alone does not say what the problem is.
+// ============================================================
+
+$isOthersCategory = $categoryID === "CATE004"
+    || strtolower(trim((string) $categoryName)) === "others";
+
+if ($isOthersCategory && $description === "") {
+    echo json_encode([
+        "success" => false,
+        "message" => "Add a description so your barangay knows what the issue is."
+    ]);
+
+    exit;
+}
+
+if (mb_strlen($description) > 300) {
+    echo json_encode([
+        "success" => false,
+        "message" => "Please keep the description within 300 characters."
+    ]);
+
+    exit;
+}
+
+
+// ============================================================
 // GENERATE REPORT ID
 // Example:
 // REP001
@@ -850,11 +877,12 @@ try {
     // ERROR RESPONSE
     // ========================================================
 
+    error_log("CitiSense submit report error: " . $e->getMessage());
     http_response_code(500);
 
     echo json_encode([
         "success" => false,
-        "message" => $e->getMessage()
+        "message" => "Your report could not be sent. Please try again."
     ]);
 
     

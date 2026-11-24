@@ -63,7 +63,7 @@ try {
     $outputs = runRoboflowWorkflowImage($imageBytes);
 } catch (RoboflowWorkflowException $exception) {
     error_log('Roboflow classification error: ' . $exception->getMessage());
-    sendResponse(false, $exception->getMessage(), [], 502);
+    sendResponse(false, 'The AI could not analyze this photo right now. Please choose a category yourself.', [], 502);
 } catch (Throwable $exception) {
     error_log('Roboflow classification error: ' . $exception->getMessage());
     sendResponse(false, 'Unable to process the Roboflow classification.', [], 500);

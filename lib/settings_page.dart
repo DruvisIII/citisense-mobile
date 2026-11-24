@@ -4,6 +4,12 @@ import 'package:citisense/api_config.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:citisense/api_client.dart';
+import 'package:citisense/auth_session.dart';
+import 'package:citisense/change_password_page.dart';
+import 'package:citisense/friendly_errors.dart';
+import 'package:citisense/validators.dart';
 import 'package:citisense/app_theme.dart';
 import 'package:citisense/live_updates.dart';
 import 'package:citisense/mascot.dart';
@@ -190,6 +196,11 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 28),
               _buildSectionTitle('ACCOUNT'),
               const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: _buildChangePasswordCard(),
+              ),
+              const SizedBox(height: 12),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: _buildLogoutCard(),
@@ -473,44 +484,55 @@ class _SettingsPageState extends State<SettingsPage> {
     ),
   );
 
+  // The Small / Medium / Large switch sits on its own row under the title,
+  // so at Large text the title keeps the full width and never breaks
+  // into single letters.
   Widget _buildFontSizeTile() => Container(
     decoration: _cardDecoration(),
     padding: const EdgeInsets.all(16),
-    child: Row(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildIconCircle(
-          Icons.text_fields_rounded,
-          AppColors.successSoft,
-          AppColors.success,
-        ),
-        const SizedBox(width: 13),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text(
-                'Font Size',
-                style: TextStyle(
-                  fontFamily: appFontFamily,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: darkBlue,
-                ),
+        Row(
+          children: [
+            _buildIconCircle(
+              Icons.text_fields_rounded,
+              AppColors.successSoft,
+              AppColors.success,
+            ),
+            const SizedBox(width: 13),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Font Size',
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: appFontFamily,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: darkBlue,
+                    ),
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    'Adjust the text size in the app.',
+                    style: TextStyle(
+                      fontFamily: appFontFamily,
+                      fontSize: 12.5,
+                      height: 1.4,
+                      color: textGrey,
+                    ),
+                  ),
+                ],
               ),
-              SizedBox(height: 6),
-              Text(
-                'Adjust the text size in the app.',
-                style: TextStyle(
-                  fontFamily: appFontFamily,
-                  fontSize: 12,
-                  height: 1.4,
-                  color: textGrey,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
-        const SizedBox(width: 6),
+        const SizedBox(height: 14),
         ValueListenableBuilder<double>(
           valueListenable: appFontScale,
           builder: (context, scale, child) {
@@ -520,17 +542,17 @@ class _SettingsPageState extends State<SettingsPage> {
                 ? 'Large'
                 : 'Medium';
             return Container(
+              width: double.infinity,
               padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
                 color: AppColors.surfaceMuted,
                 borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _fontOption('Small', selected),
-                  _fontOption('Medium', selected),
-                  _fontOption('Large', selected),
+                  Expanded(child: _fontOption('Small', selected)),
+                  Expanded(child: _fontOption('Medium', selected)),
+                  Expanded(child: _fontOption('Large', selected)),
                 ],
               ),
             );
@@ -574,6 +596,54 @@ class _SettingsPageState extends State<SettingsPage> {
               SizedBox(height: 6),
               Text(
                 'Share suggestions or report a problem with the app.',
+                style: TextStyle(
+                  fontFamily: appFontFamily,
+                  fontSize: 12.5,
+                  color: textGrey,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Icon(Icons.chevron_right_rounded, color: textGrey, size: 28),
+      ],
+    ),
+  );
+
+  Widget _buildChangePasswordCard() => _tappableCard(
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChangePasswordPage(userID: widget.userID),
+        ),
+      );
+    },
+    padding: const EdgeInsets.all(16),
+    child: Row(
+      children: [
+        _buildIconCircle(
+          Icons.lock_outline_rounded,
+          AppColors.primarySoft,
+          AppColors.primary,
+        ),
+        const SizedBox(width: 14),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Change Password',
+                style: TextStyle(
+                  fontFamily: appFontFamily,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: darkBlue,
+                ),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'Update the password you use to log in.',
                 style: TextStyle(
                   fontFamily: appFontFamily,
                   fontSize: 12.5,
@@ -648,10 +718,11 @@ class _SettingsPageState extends State<SettingsPage> {
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 9),
+        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: isSelected ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.sm - 3),
           boxShadow: isSelected
               ? [
                   BoxShadow(
@@ -664,8 +735,11 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         child: Text(
           label,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.fade,
           style: TextStyle(
-            fontSize: 11,
+            fontSize: 12.5,
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
             color: isSelected ? darkBlue : textGrey,
             fontFamily: appFontFamily,
@@ -733,8 +807,9 @@ class _SettingsPageState extends State<SettingsPage> {
       },
     ).then((confirmed) {
       if (confirmed == true && mounted) {
-        // Stop automatic refreshing.
+        // Stop automatic refreshing and end the session.
         LiveUpdates.instance.stop();
+        AuthSession.clear();
         Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
     });
@@ -798,7 +873,13 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
 
     _emailController = TextEditingController(text: widget.email);
 
-    _contactController = TextEditingController(text: widget.contactNo);
+    // Shown as +63 followed by the 10 digits (stored as 09XXXXXXXXX).
+    _contactController = TextEditingController(
+      text: PhilippinePhone.localPart(widget.contactNo),
+    );
+    _contactController.addListener(() {
+      if (mounted) setState(() {});
+    });
 
     _selectedBarangayID = widget.barangayID;
     _profilePic = widget.profilePic;
@@ -1019,12 +1100,13 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
 
     final email = _emailController.text.trim();
 
-    final contactNo = _contactController.text.trim();
+    final String phoneDigits = _contactController.text.trim();
+    final contactNo = PhilippinePhone.toStored(phoneDigits);
 
     if (firstName.isEmpty ||
         lastName.isEmpty ||
         email.isEmpty ||
-        contactNo.isEmpty ||
+        phoneDigits.isEmpty ||
         _selectedBarangayID == null ||
         _selectedBarangayID!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1037,6 +1119,19 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid email address.')),
+      );
+
+      return;
+    }
+
+    if (!PhilippinePhone.isValid(phoneDigits)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please enter a valid mobile number: 10 digits after +63.',
+          ),
+          backgroundColor: AppColors.danger,
+        ),
       );
 
       return;
@@ -1111,14 +1206,22 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
         );
       }
 
-      if (response.statusCode != 200) {
-        throw Exception('Server returned ${response.statusCode}');
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(response.body);
+      } on FormatException {
+        decoded = null;
       }
 
-      final decoded = jsonDecode(response.body);
-
-      if (decoded['success'] != true) {
-        throw Exception(decoded['message'] ?? 'Failed to update profile.');
+      if (response.statusCode != 200 ||
+          decoded is! Map ||
+          decoded['success'] != true) {
+        throw Exception(
+          FriendlyErrors.fromResponse(
+            response,
+            fallback: 'We could not save your details. Please try again.',
+          ),
+        );
       }
 
       final updatedUser = decoded['data'] ?? {};
@@ -1160,9 +1263,13 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
         _isSaving = false;
       });
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to update details: $e')));
+      debugPrint('Update profile error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(FriendlyErrors.fromException(e)),
+          backgroundColor: AppColors.danger,
+        ),
+      );
     }
   }
 
@@ -1292,6 +1399,9 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
     required TextEditingController controller,
     required IconData icon,
     TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
+    String? prefixText,
+    String? errorText,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1299,6 +1409,7 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
         controller: controller,
         enabled: _isEditing,
         keyboardType: keyboardType,
+        inputFormatters: inputFormatters,
         style: const TextStyle(
           fontSize: 15,
           color: darkBlue,
@@ -1306,6 +1417,23 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
         ),
         decoration: InputDecoration(
           labelText: label,
+          prefixText: prefixText,
+          prefixStyle: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: darkBlue,
+            fontFamily: appFontFamily,
+          ),
+          errorText: errorText,
+          errorMaxLines: 2,
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            borderSide: const BorderSide(color: AppColors.danger),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            borderSide: const BorderSide(color: AppColors.danger, width: 1.5),
+          ),
           labelStyle: const TextStyle(
             color: textGrey,
             fontFamily: appFontFamily,
@@ -1545,6 +1673,14 @@ class _PersonalDetailsPageState extends State<PersonalDetailsPage> {
                 controller: _contactController,
                 icon: Icons.phone_outlined,
                 keyboardType: TextInputType.phone,
+                inputFormatters: PhilippinePhone.inputFormatters,
+                prefixText: '${PhilippinePhone.countryCode} ',
+                errorText: _isEditing
+                    ? PhilippinePhone.error(
+                        _contactController.text,
+                        showEmpty: true,
+                      )
+                    : null,
               ),
 
               // BARANGAY
@@ -1639,8 +1775,12 @@ class EmailChangeApi {
 
       return EmailCodeResult(
         ok,
-        decoded['message']?.toString() ??
-            (ok ? 'Verification code sent.' : 'Failed to send the code.'),
+        ok
+            ? (decoded['message']?.toString() ?? 'Verification code sent.')
+            : FriendlyErrors.fromMessage(
+                decoded['message']?.toString(),
+                fallback: 'We could not send the code. Please try again.',
+              ),
         emailTaken: taken,
       );
     } on TimeoutException {
@@ -1650,10 +1790,7 @@ class EmailChangeApi {
       );
     } catch (e) {
       debugPrint('Send email change code error: $e');
-      return const EmailCodeResult(
-        false,
-        'Unable to send the verification code. Check your connection.',
-      );
+      return const EmailCodeResult(false, FriendlyErrors.noConnection);
     }
   }
 
@@ -1692,16 +1829,17 @@ class EmailChangeApi {
 
       return EmailCodeResult(
         ok,
-        decoded['message']?.toString() ??
-            (ok ? 'Email verified.' : 'Invalid verification code.'),
+        ok
+            ? (decoded['message']?.toString() ?? 'Email verified.')
+            : FriendlyErrors.fromMessage(
+                decoded['message']?.toString(),
+                fallback: 'That code did not work. Please try again.',
+              ),
         emailTaken: decoded['code']?.toString() == 'EMAIL_TAKEN',
       );
     } catch (e) {
       debugPrint('Verify email change code error: $e');
-      return const EmailCodeResult(
-        false,
-        'Unable to verify the code. Check your connection.',
-      );
+      return const EmailCodeResult(false, FriendlyErrors.noConnection);
     }
   }
 }
@@ -2043,40 +2181,45 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
     super.dispose();
   }
 
-  bool get _canSend =>
-      !_sending && _type != null && _messageController.text.trim().length >= 10;
+  bool _submitted = false;
+
+  String? get _typeError =>
+      _submitted && _type == null ? 'Choose the type of feedback.' : null;
+
+  String? get _messageError {
+    if (_error != null) return _error;
+    return _submitted && _messageController.text.trim().isEmpty
+        ? 'Please write your feedback.'
+        : null;
+  }
 
   Future<void> _send() async {
-    if (!_canSend) return;
+    // One request at a time, so a double tap cannot send it twice.
+    if (_sending) return;
 
     setState(() {
-      _sending = true;
+      _submitted = true;
       _error = null;
     });
 
-    try {
-      final response = await http
-          .post(
-            Uri.parse('$baseUrl/submit_app_feedback.php'),
-            headers: {'Accept': 'application/json'},
-            body: {
-              'userID': widget.userID,
-              'type': _type!,
-              'rating': _rating.toString(),
-              'message': _messageController.text.trim(),
-            },
-          )
-          .timeout(const Duration(seconds: 25));
+    if (_type == null || _messageController.text.trim().isEmpty) return;
 
-      final decoded = jsonDecode(response.body);
-      final bool ok = response.statusCode == 200 && decoded['success'] == true;
+    setState(() => _sending = true);
+
+    try {
+      final result = await ApiClient.postForm('submit_app_feedback.php', {
+        'userID': widget.userID,
+        'type': _type!,
+        'rating': _rating.toString(),
+        'message': _messageController.text.trim(),
+      });
 
       if (!mounted) return;
 
-      if (!ok) {
+      if (!result.success) {
         setState(() {
           _sending = false;
-          _error = decoded['message']?.toString() ?? 'Failed to send feedback.';
+          _error = result.message;
         });
         return;
       }
@@ -2113,7 +2256,7 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
       if (!mounted) return;
       setState(() {
         _sending = false;
-        _error = 'Unable to send feedback. Check your connection.';
+        _error = FriendlyErrors.fromException(e);
       });
     }
   }
@@ -2145,18 +2288,38 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
 
               const Text('Type of feedback', style: AppText.fieldLabel),
               const SizedBox(height: 10),
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                childAspectRatio: 3.2,
-                children: [
-                  for (final t in _types)
-                    _typeChip(value: t.$1, label: t.$2, icon: t.$3),
-                ],
-              ),
+              // Two per row; each button grows with the text size.
+              for (int i = 0; i < _types.length; i += 2) ...[
+                if (i > 0) const SizedBox(height: 10),
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (int j = i; j < i + 2 && j < _types.length; j++) ...[
+                        if (j > i) const SizedBox(width: 10),
+                        Expanded(
+                          child: _typeChip(
+                            value: _types[j].$1,
+                            label: _types[j].$2,
+                            icon: _types[j].$3,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+              if (_typeError != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  _typeError!,
+                  style: const TextStyle(
+                    fontFamily: appFontFamily,
+                    fontSize: 12,
+                    color: AppColors.danger,
+                  ),
+                ),
+              ],
 
               const SizedBox(height: 22),
               const Text(
@@ -2199,10 +2362,15 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
                 maxLength: 1000,
                 textCapitalization: TextCapitalization.sentences,
                 style: const TextStyle(fontFamily: appFontFamily, fontSize: 14),
+                onChanged: (_) {
+                  if (_error != null) setState(() => _error = null);
+                },
                 decoration: InputDecoration(
-                  hintText: 'Write at least 10 characters...',
+                  hintText:
+                      'Tell us what you like, what is wrong, or what '
+                      'we could improve...',
                   fillColor: Colors.white,
-                  errorText: _error,
+                  errorText: _messageError,
                   errorMaxLines: 3,
                 ),
               ),
@@ -2212,7 +2380,7 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _canSend ? _send : null,
+                  onPressed: _sending ? null : _send,
                   child: _sending
                       ? const SizedBox(
                           width: 22,
@@ -2246,11 +2414,14 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
         borderRadius: BorderRadius.circular(AppRadius.sm),
         onTap: _sending ? null : () => setState(() => _type = value),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          constraints: const BoxConstraints(minHeight: 50),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.sm),
             border: Border.all(
-              color: selected ? AppColors.primary : AppColors.border,
+              color: selected
+                  ? AppColors.primary
+                  : (_typeError != null ? AppColors.danger : AppColors.border),
               width: selected ? 1.6 : 1,
             ),
           ),
@@ -2265,7 +2436,6 @@ class _AppFeedbackPageState extends State<AppFeedbackPage> {
               Expanded(
                 child: Text(
                   label,
-                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: appFontFamily,
                     fontSize: 13,

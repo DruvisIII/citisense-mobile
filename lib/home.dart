@@ -4,6 +4,8 @@ import 'package:citisense/api_config.dart';
 
 import 'package:flutter/material.dart';
 import 'package:citisense/announcement_details_page.dart';
+import 'package:citisense/api_client.dart';
+import 'package:citisense/barangay_messages_page.dart';
 import 'package:citisense/app_theme.dart';
 import 'package:citisense/live_updates.dart';
 import 'package:citisense/mascot.dart';
@@ -754,6 +756,8 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
+              const SizedBox(height: 14),
+              _buildMessagesCard(),
               const SizedBox(height: 20),
               Row(
                 children: [
@@ -871,13 +875,19 @@ class _HomePageState extends State<HomePage> {
 
   // ============================================================
   // ANNOUNCEMENT CARD
+  // ------------------------------------------------------------
+  // Picture (or the barangay icon when there is none) on the left,
+  // title, date and a short preview on the right, and a footer with
+  // the comment count. Tapping opens the details page.
   // ============================================================
 
   Widget _buildAnnouncementCard(Map<String, dynamic> announcement) {
     final title = announcement['title']?.toString().trim() ?? '';
     final content = announcement['content']?.toString().trim() ?? '';
-    final date = _parseAnnouncementDate(announcement['datePosted']);
+    final date = parseApiTime(announcement['datePosted']);
     final images = announcementImages(announcement);
+    final int comments =
+        int.tryParse(announcement['commentCount']?.toString() ?? '') ?? 0;
 
     return Container(
       width: double.infinity,
@@ -893,75 +903,57 @@ class _HomePageState extends State<HomePage> {
         child: InkWell(
           onTap: () => _openAnnouncement(announcement),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: _buildAnnouncementImage(''),
-                    ),
+                    _buildAnnouncementThumbnail(images),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            title.isNotEmpty
-                                ? title.toUpperCase()
-                                : 'ANNOUNCEMENT',
+                            title.isNotEmpty ? title : 'Announcement',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontFamily: appFontFamily,
-                              fontSize: 15,
-                              height: 1.22,
+                              fontSize: 15.5,
+                              height: 1.25,
                               fontWeight: FontWeight.w800,
-                              color: AppColors.primary,
+                              color: AppColors.ink,
                             ),
                           ),
                           if (date != null) ...[
-                            const SizedBox(height: 9),
-                            Wrap(
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              spacing: 7,
-                              runSpacing: 5,
+                            const SizedBox(height: 5),
+                            Row(
                               children: [
                                 const Icon(
-                                  Icons.calendar_month_outlined,
-                                  size: 16,
+                                  Icons.schedule_rounded,
+                                  size: 14,
                                   color: textGrey,
                                 ),
-                                Text(
-                                  _formatDate(date),
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: textGrey,
-                                    fontFamily: appFontFamily,
-                                  ),
-                                ),
-                                const Text(
-                                  '·',
-                                  style: TextStyle(color: textGrey),
-                                ),
-                                const Icon(
-                                  Icons.access_time_outlined,
-                                  size: 16,
-                                  color: textGrey,
-                                ),
-                                Text(
-                                  _formatTime(date),
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: textGrey,
-                                    fontFamily: appFontFamily,
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    relativeTime(date),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: textGrey,
+                                      fontFamily: appFontFamily,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                           ],
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           Text(
                             content.isNotEmpty
                                 ? content
@@ -970,8 +962,8 @@ class _HomePageState extends State<HomePage> {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 13.5,
-                              height: 1.5,
-                              color: darkBlue,
+                              height: 1.45,
+                              color: textGrey,
                               fontFamily: appFontFamily,
                             ),
                           ),
@@ -980,29 +972,48 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ],
                 ),
-                if (images.isNotEmpty) ...[
-                  const SizedBox(height: 14),
-                  _buildAnnouncementPreview(images),
-                ],
+                const SizedBox(height: 12),
+                const Divider(height: 1, color: AppColors.divider),
                 const SizedBox(height: 10),
-                const Align(
-                  alignment: Alignment.centerRight,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'View details',
-                        style: TextStyle(
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.chat_bubble_outline_rounded,
+                      size: 16,
+                      color: textGrey,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        comments == 0
+                            ? 'No comments yet'
+                            : comments == 1
+                            ? '1 comment'
+                            : '$comments comments',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
                           fontFamily: appFontFamily,
                           fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          color: primaryBlue,
+                          color: textGrey,
                         ),
                       ),
-                      SizedBox(width: 2),
-                      Icon(Icons.chevron_right, size: 18, color: primaryBlue),
-                    ],
-                  ),
+                    ),
+                    const Text(
+                      'View details',
+                      style: TextStyle(
+                        fontFamily: appFontFamily,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: primaryBlue,
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: primaryBlue,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -1016,178 +1027,140 @@ class _HomePageState extends State<HomePage> {
   // OPEN ANNOUNCEMENT DETAILS
   // ============================================================
 
-  void _openAnnouncement(Map<String, dynamic> announcement) {
-    Navigator.of(context).push(
+  Future<void> _openAnnouncement(Map<String, dynamic> announcement) async {
+    await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => AnnouncementDetailsPage(announcement: announcement),
-      ),
-    );
-  }
-
-  // ============================================================
-  // ANNOUNCEMENT PICTURE PREVIEW (first picture, "+N" for more)
-  // ============================================================
-
-  Widget _buildAnnouncementPreview(List<String> images) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      child: AspectRatio(
-        aspectRatio: 16 / 9,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            AnnouncementNetworkImage(url: images.first),
-            if (images.length > 1)
-              Positioned(
-                right: 10,
-                bottom: 10,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.photo_library_outlined,
-                        size: 14,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        '+${images.length - 1}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
+        builder: (_) => AnnouncementDetailsPage(
+          announcement: announcement,
+          userID: widget.userID,
         ),
       ),
     );
+    // Comment counts may have changed.
+    if (mounted) _loadAnnouncements(silent: true);
   }
 
   // ============================================================
-  // PARSE ANNOUNCEMENT DATE
+  // ANNOUNCEMENT THUMBNAIL
+  // ------------------------------------------------------------
+  // First picture, cropped to fill a fixed square (no stretching);
+  // "+N" when there are more. The barangay icon when there is none.
   // ============================================================
 
-  DateTime? _parseAnnouncementDate(dynamic value) {
-    if (value is DateTime) {
-      return value;
-    }
+  Widget _buildAnnouncementThumbnail(List<String> images) {
+    const double size = 84;
 
-    if (value is String) {
-      return DateTime.tryParse(value);
-    }
-
-    return null;
-  }
-
-  // ============================================================
-  // FORMAT ANNOUNCEMENT DATE
-  // ============================================================
-
-  String _formatDate(dynamic value) {
-    DateTime? date;
-
-    if (value is DateTime) {
-      date = value;
-    } else if (value is String) {
-      date = DateTime.tryParse(value);
-    }
-
-    if (date == null) return '';
-
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-
-    final String day = date.day.toString().padLeft(2, '0');
-
-    return '${months[date.month - 1]} '
-        '$day, ${date.year}';
-  }
-
-  // ============================================================
-  // FORMAT ANNOUNCEMENT TIME
-  // ============================================================
-
-  String _formatTime(dynamic value) {
-    DateTime? date;
-
-    if (value is DateTime) {
-      date = value;
-    } else if (value is String) {
-      date = DateTime.tryParse(value);
-    }
-
-    if (date == null) return '';
-
-    int hour = date.hour;
-
-    final String minute = date.minute.toString().padLeft(2, '0');
-
-    final String period = hour >= 12 ? 'PM' : 'AM';
-
-    if (hour == 0) {
-      hour = 12;
-    } else if (hour > 12) {
-      hour -= 12;
-    }
-
-    final String formattedHour = hour.toString().padLeft(2, '0');
-
-    return '$formattedHour:$minute $period';
-  }
-
-  // ============================================================
-  // ANNOUNCEMENT IMAGE
-  // ============================================================
-
-  Widget _buildAnnouncementImage(String imageUrl) {
-    return Container(
-      width: 76,
-      height: 76,
-      decoration: BoxDecoration(
-        color: AppColors.primarySoft,
-        shape: BoxShape.circle,
-        border: Border.all(color: AppColors.primaryBorder),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: imageUrl.isNotEmpty
-          ? Image.network(
-              imageUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return const Icon(
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: images.isEmpty
+            ? Container(
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  border: Border.all(color: AppColors.primaryBorder),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: const Icon(
                   Icons.account_balance,
                   size: 36,
                   color: primaryBlue,
-                );
-              },
-            )
-          : const Icon(Icons.account_balance, size: 36, color: primaryBlue),
+                ),
+              )
+            : Stack(
+                fit: StackFit.expand,
+                children: [
+                  AnnouncementNetworkImage(url: images.first),
+                  if (images.length > 1)
+                    Positioned(
+                      right: 5,
+                      bottom: 5,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '+${images.length - 1}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // MESSAGE YOUR BARANGAY
+  // ============================================================
+
+  Widget _buildMessagesCard() {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => BarangayMessagesPage(userID: widget.userID),
+          ),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: AppColors.primaryBorder),
+          ),
+          child: const Row(
+            children: [
+              CircleAvatar(
+                radius: 23,
+                backgroundColor: AppColors.primarySoft,
+                child: Icon(Icons.forum_rounded, color: primaryBlue, size: 24),
+              ),
+              SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Message your barangay',
+                      style: TextStyle(
+                        fontFamily: appFontFamily,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: darkBlue,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Ask a question or follow up on a concern.',
+                      style: TextStyle(
+                        fontFamily: appFontFamily,
+                        fontSize: 12.5,
+                        height: 1.4,
+                        color: textGrey,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: textGrey, size: 28),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

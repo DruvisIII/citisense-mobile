@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:citisense/api_config.dart';
 
 import 'package:flutter/material.dart';
+import 'package:citisense/friendly_errors.dart';
 import 'package:citisense/app_theme.dart';
 import 'package:http/http.dart' as http;
 import 'package:citisense/barangaySelection.dart';
@@ -89,7 +90,12 @@ class _EmailVerificationState extends State<EmailVerification> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(decoded['message'] ?? 'Email verification failed.'),
+            content: Text(
+              FriendlyErrors.fromMessage(
+                decoded['message']?.toString(),
+                fallback: 'We could not verify your email. Please try again.',
+              ),
+            ),
             backgroundColor: AppColors.danger,
           ),
         );
@@ -99,7 +105,7 @@ class _EmailVerificationState extends State<EmailVerification> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Verification failed: $e'),
+          content: Text(FriendlyErrors.fromException(e)),
           backgroundColor: AppColors.danger,
         ),
       );

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:citisense/api_config.dart';
 
 import 'package:flutter/material.dart';
+import 'package:citisense/friendly_errors.dart';
 import 'package:citisense/app_theme.dart';
 import 'package:citisense/mascot.dart';
 import 'package:http/http.dart' as http;
@@ -72,7 +73,7 @@ class _BarangaySelectionState extends State<BarangaySelection> {
           .timeout(const Duration(seconds: 20));
 
       if (response.statusCode != 200) {
-        throw Exception('Server returned status code ${response.statusCode}.');
+        throw Exception(FriendlyErrors.fromResponse(response));
       }
 
       final decoded = jsonDecode(response.body);
@@ -82,8 +83,8 @@ class _BarangaySelectionState extends State<BarangaySelection> {
           decoded['data'] is! List) {
         throw Exception(
           decoded is Map
-              ? decoded['message'] ?? 'Invalid barangay data.'
-              : 'Invalid server response.',
+              ? FriendlyErrors.fromMessage(decoded['message']?.toString())
+              : FriendlyErrors.server,
         );
       }
 
@@ -116,7 +117,10 @@ class _BarangaySelectionState extends State<BarangaySelection> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to load barangays: $e'),
+          content: Text(
+            'We could not load the barangay list. '
+            '${FriendlyErrors.fromException(e)}',
+          ),
           backgroundColor: AppColors.danger,
         ),
       );
@@ -204,7 +208,10 @@ class _BarangaySelectionState extends State<BarangaySelection> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              decoded['message']?.toString() ?? 'Failed to create account.',
+              FriendlyErrors.fromMessage(
+                decoded['message']?.toString(),
+                fallback: 'We could not create your account. Please try again.',
+              ),
             ),
             backgroundColor: AppColors.danger,
           ),
@@ -215,7 +222,7 @@ class _BarangaySelectionState extends State<BarangaySelection> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Registration failed: $e'),
+          content: Text(FriendlyErrors.fromException(e)),
           backgroundColor: AppColors.danger,
         ),
       );

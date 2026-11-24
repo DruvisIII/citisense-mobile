@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:citisense/api_config.dart';
 
 import 'package:flutter/material.dart';
+import 'package:citisense/friendly_errors.dart';
+import 'package:citisense/validators.dart';
 import 'package:citisense/app_theme.dart';
 import 'package:http/http.dart' as http;
 
@@ -30,6 +32,34 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   bool _isLoading = false;
   bool _obscureNewPassword = true;
   bool _obscureConfirmPassword = true;
+  bool _passwordSubmitted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Re-check the new password as the user types.
+    _newPasswordController.addListener(_refresh);
+    _confirmPasswordController.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  String? get _newPasswordError => PasswordRules.error(
+    _newPasswordController.text,
+    showEmpty: _passwordSubmitted,
+  );
+
+  String? get _confirmError {
+    final confirm = _confirmPasswordController.text;
+    if (confirm.isEmpty) {
+      return _passwordSubmitted ? 'Re-enter your new password.' : null;
+    }
+    return confirm == _newPasswordController.text
+        ? null
+        : 'The passwords do not match.';
+  }
 
   static const Color _primaryBlue = AppColors.primary;
   static const Color _darkBlue = AppColors.ink;
@@ -60,18 +90,21 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         )
         .timeout(const Duration(seconds: 30));
 
-    final dynamic decoded = jsonDecode(response.body);
+    final dynamic decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } on FormatException {
+      throw Exception(FriendlyErrors.fromResponse(response));
+    }
 
     if (decoded is! Map<String, dynamic>) {
-      throw Exception('The server returned an invalid response.');
+      throw Exception(FriendlyErrors.server);
     }
 
     if (response.statusCode < 200 ||
         response.statusCode >= 300 ||
         decoded['success'] != true) {
-      throw Exception(
-        decoded['message']?.toString() ?? 'The request could not be completed.',
-      );
+      throw Exception(FriendlyErrors.fromResponse(response));
     }
 
     return decoded;
@@ -117,7 +150,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
 
       _showMessage(result['message']?.toString() ?? 'Request completed.');
     } catch (e) {
-      _showMessage(e.toString().replaceFirst('Exception: ', ''), error: true);
+      _showMessage(FriendlyErrors.fromException(e), error: true);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -149,7 +182,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       final token = result['resetToken']?.toString();
 
       if (token == null || token.isEmpty) {
-        throw Exception('The server did not provide a reset session.');
+        throw Exception(FriendlyErrors.server);
       }
 
       if (!mounted) return;
@@ -159,7 +192,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         _step = 2;
       });
     } catch (e) {
-      _showMessage(e.toString().replaceFirst('Exception: ', ''), error: true);
+      _showMessage(FriendlyErrors.fromException(e), error: true);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -175,11 +208,11 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     final password = _newPasswordController.text;
     final confirmation = _confirmPasswordController.text;
 
-    if (password.length < 8) {
-      _showMessage(
-        'Your password must contain at least 8 characters.',
-        error: true,
-      );
+    setState(() => _passwordSubmitted = true);
+
+    final passwordError = PasswordRules.error(password, showEmpty: true);
+    if (passwordError != null) {
+      _showMessage(passwordError, error: true);
       return;
     }
 
@@ -210,7 +243,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
 
       Navigator.pop(context);
     } catch (e) {
-      _showMessage(e.toString().replaceFirst('Exception: ', ''), error: true);
+      _showMessage(FriendlyErrors.fromException(e), error: true);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -222,9 +255,18 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   // INPUT DECORATION
   // ------------------------------------------------------------
 
-  InputDecoration _inputDecoration(String label, {Widget? suffixIcon}) {
+  InputDecoration _inputDecoration(
+    String label, {
+    Widget? suffixIcon,
+    String? errorText,
+  }) {
     // Borders, fill and colors come from AppTheme so every form matches.
-    return InputDecoration(labelText: label, suffixIcon: suffixIcon);
+    return InputDecoration(
+      labelText: label,
+      suffixIcon: suffixIcon,
+      errorText: errorText,
+      errorMaxLines: 2,
+    );
   }
 
   // ------------------------------------------------------------
@@ -367,8 +409,11 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           controller: _newPasswordController,
           obscureText: _obscureNewPassword,
           style: const TextStyle(fontFamily: appFontFamily, fontSize: 14),
+          autocorrect: false,
+          enableSuggestions: false,
           decoration: _inputDecoration(
             'New password',
+            errorText: _newPasswordError,
             suffixIcon: IconButton(
               onPressed: () {
                 setState(() {
@@ -390,8 +435,11 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           controller: _confirmPasswordController,
           obscureText: _obscureConfirmPassword,
           style: const TextStyle(fontFamily: appFontFamily, fontSize: 14),
+          autocorrect: false,
+          enableSuggestions: false,
           decoration: _inputDecoration(
             'Confirm new password',
+            errorText: _confirmError,
             suffixIcon: IconButton(
               onPressed: () {
                 setState(() {
@@ -412,7 +460,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         const Align(
           alignment: Alignment.centerLeft,
           child: Text(
-            'Use at least 8 characters.',
+            'Use at least 6 characters: letters, numbers and keyboard symbols.',
             style: TextStyle(
               fontFamily: appFontFamily,
               fontSize: 12,

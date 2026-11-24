@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:citisense/api_config.dart';
 
 import 'package:flutter/material.dart';
+import 'package:citisense/friendly_errors.dart';
+import 'package:citisense/validators.dart';
 import 'package:citisense/app_theme.dart';
 import 'package:citisense/mascot.dart';
 import 'package:http/http.dart' as http;
@@ -27,6 +29,27 @@ class _CreateAccountState extends State<CreateAccount> {
   bool _obscurePassword = true;
   bool _isSendingOtp = false;
 
+  // Turns on "required" errors for empty fields after a submit attempt.
+  bool _submitted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Re-check the phone and password as the user types.
+    _contactController.addListener(_refresh);
+    _passwordController.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  String? get _phoneError =>
+      PhilippinePhone.error(_contactController.text, showEmpty: _submitted);
+
+  String? get _passwordError =>
+      PasswordRules.error(_passwordController.text, showEmpty: _submitted);
+
   @override
   void dispose() {
     _firstNameController.dispose();
@@ -37,22 +60,6 @@ class _CreateAccountState extends State<CreateAccount> {
     super.dispose();
   }
 
-  // Accept 09XXXXXXXXX, 639XXXXXXXXX, and +639XXXXXXXXX.
-  // Store the normalized number as 09XXXXXXXXX.
-  String? _normalizePhilippineNumber(String input) {
-    String digits = input.replaceAll(RegExp(r'\D'), '');
-
-    if (digits.startsWith('63')) {
-      digits = '0${digits.substring(2)}';
-    }
-
-    if (RegExp(r'^09\d{9}$').hasMatch(digits)) {
-      return digits;
-    }
-
-    return null;
-  }
-
   Future<void> _createAccount() async {
     if (_isSendingOtp) return;
 
@@ -60,56 +67,48 @@ class _CreateAccountState extends State<CreateAccount> {
     final lastName = _lastNameController.text.trim();
     final email = _emailController.text.trim().toLowerCase();
     final password = _passwordController.text;
-    final contactNumber = _normalizePhilippineNumber(_contactController.text);
+    final phoneDigits = _contactController.text;
+
+    setState(() => _submitted = true);
 
     if (firstName.isEmpty ||
         lastName.isEmpty ||
         email.isEmpty ||
-        _contactController.text.trim().isEmpty ||
+        phoneDigits.isEmpty ||
         password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all fields.')),
-      );
+      _showError('Please fill in all fields.');
       return;
     }
 
     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid email address.')),
-      );
+      _showError('Please enter a valid email address.');
       return;
     }
 
-    if (contactNumber == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please enter a valid Philippine mobile number (09XXXXXXXXX).',
-          ),
-        ),
-      );
+    if (!PhilippinePhone.isValid(phoneDigits)) {
+      _showError('Please enter a valid mobile number: 10 digits after +63.');
       return;
     }
 
-    if (password.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Password must be at least 6 characters.'),
-        ),
-      );
+    if (!PasswordRules.isValid(password)) {
+      _showError(_passwordError ?? FriendlyErrors.invalidInput);
       return;
     }
+
+    final contactNumber = PhilippinePhone.toStored(phoneDigits);
 
     setState(() => _isSendingOtp = true);
 
     try {
-      final response = await http.post(
-        Uri.parse(_sendOtpUrl),
-        headers: {'Accept': 'application/json'},
-        body: {'firstName': firstName, 'email': email},
-      );
+      final response = await http
+          .post(
+            Uri.parse(_sendOtpUrl),
+            headers: {'Accept': 'application/json'},
+            body: {'firstName': firstName, 'email': email},
+          )
+          .timeout(const Duration(seconds: 30));
 
-      final decoded = jsonDecode(response.body);
+      final dynamic decoded = jsonDecode(response.body);
 
       if (response.statusCode == 200 && decoded['success'] == true) {
         if (!mounted) return;
@@ -127,29 +126,30 @@ class _CreateAccountState extends State<CreateAccount> {
           ),
         );
       } else {
-        if (!mounted) return;
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(decoded['message'] ?? 'Failed to send OTP.'),
-            backgroundColor: AppColors.danger,
+        _showError(
+          FriendlyErrors.fromResponse(
+            response,
+            fallback:
+                'We could not send the verification code. '
+                'Please try again.',
           ),
         );
       }
     } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Unable to send verification code: $e'),
-          backgroundColor: AppColors.danger,
-        ),
-      );
+      debugPrint('Send registration OTP error: $e');
+      _showError(FriendlyErrors.fromException(e));
     } finally {
       if (mounted) {
         setState(() => _isSendingOtp = false);
       }
     }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: AppColors.danger),
+    );
   }
 
   InputDecoration _inputDecoration(String hint, IconData icon) {
@@ -273,12 +273,30 @@ class _CreateAccountState extends State<CreateAccount> {
                     ),
                     const SizedBox(height: 12),
 
-                    _textField(
-                      label: 'Contact Number',
-                      hint: '09XXXXXXXXX or +639XXXXXXXXX',
-                      icon: Icons.phone_outlined,
+                    _fieldLabel('Contact Number'),
+                    const SizedBox(height: 6),
+                    TextField(
                       controller: _contactController,
                       keyboardType: TextInputType.phone,
+                      textInputAction: TextInputAction.next,
+                      inputFormatters: PhilippinePhone.inputFormatters,
+                      style: const TextStyle(
+                        fontFamily: appFontFamily,
+                        fontSize: 14,
+                      ),
+                      decoration:
+                          _inputDecoration(
+                            '9XX XXX XXXX',
+                            Icons.phone_outlined,
+                          ).copyWith(
+                            prefixIcon: const _CountryCodePrefix(),
+                            prefixIconConstraints: const BoxConstraints(
+                              minWidth: 0,
+                              minHeight: 44,
+                            ),
+                            errorText: _phoneError,
+                            errorMaxLines: 2,
+                          ),
                     ),
                     const SizedBox(height: 12),
 
@@ -287,6 +305,8 @@ class _CreateAccountState extends State<CreateAccount> {
                     TextField(
                       controller: _passwordController,
                       obscureText: _obscurePassword,
+                      autocorrect: false,
+                      enableSuggestions: false,
                       style: const TextStyle(
                         fontFamily: appFontFamily,
                         fontSize: 14,
@@ -296,6 +316,8 @@ class _CreateAccountState extends State<CreateAccount> {
                             'At least 6 characters',
                             Icons.lock_outline,
                           ).copyWith(
+                            errorText: _passwordError,
+                            errorMaxLines: 2,
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscurePassword
@@ -357,8 +379,9 @@ class _CreateAccountState extends State<CreateAccount> {
 
                     const SizedBox(height: 14),
 
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         const Text(
                           'Already have an account? ',
@@ -370,7 +393,7 @@ class _CreateAccountState extends State<CreateAccount> {
                         ),
                         GestureDetector(
                           onTap: () {
-                            Navigator.push(
+                            Navigator.pushReplacement(
                               context,
                               MaterialPageRoute(
                                 builder: (_) => const LoginPage(),
@@ -388,6 +411,36 @@ class _CreateAccountState extends State<CreateAccount> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Fixed "+63" shown at the start of the phone field.
+class _CountryCodePrefix extends StatelessWidget {
+  const _CountryCodePrefix();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 12, right: 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.phone_outlined, size: 20),
+          const SizedBox(width: 8),
+          const Text(
+            PhilippinePhone.countryCode,
+            style: TextStyle(
+              fontFamily: appFontFamily,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AppColors.ink,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(width: 1, height: 22, color: AppColors.border),
+        ],
       ),
     );
   }

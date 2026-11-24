@@ -1,21 +1,24 @@
 <?php
 require_once __DIR__ . '/password_reset_common.php';
+require_once __DIR__ . '/validation.php';
+require_once __DIR__ . '/auth.php';
 reset_require_post();
 
 $resetToken = trim((string)($_POST['resetToken'] ?? ''));
 $newPassword = (string)($_POST['newPassword'] ?? '');
 
-if (
-    !preg_match('/^[a-f0-9]{64}$/', $resetToken) ||
-    strlen($newPassword) < 8 ||
-    strlen($newPassword) > 72
-) {
+if (!preg_match('/^[a-f0-9]{64}$/', $resetToken)) {
     reset_json(
         false,
-        'Please provide a valid reset session and a password between 8 and 72 characters.',
+        'Your password reset session has expired. Please request a new code.',
         [],
         400
     );
+}
+
+$passwordError = citisense_password_error($newPassword);
+if ($passwordError !== null) {
+    reset_json(false, $passwordError, [], 400);
 }
 
 $tokenHash = hash('sha256', $resetToken);
@@ -77,6 +80,13 @@ try {
     $stmt->close();
 
     $conn->commit();
+
+    // A recovered password signs out every phone that was logged in.
+    try {
+        citisense_end_sessions($conn, $userID);
+    } catch (Throwable $sessionError) {
+        error_log('CitiSense reset: could not end sessions: ' . $sessionError->getMessage());
+    }
 
     reset_json(
         true,
