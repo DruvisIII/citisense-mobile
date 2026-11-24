@@ -167,13 +167,25 @@ foreach ($pendingReports as $row) {
     $list = $devices->get_result()->fetch_all(MYSQLI_ASSOC);
     $devices->close();
 
+    // Messages open the conversation in the app; status updates open the report.
+    $text = (string) $row['message'];
+    $lower = mb_strtolower($text);
+    $reportID = (string) ($row['reportID'] ?? '');
+    $isMessage = str_contains($lower, 'new reply from your barangay')
+        || str_contains($lower, 'replied about your report')
+        || str_contains($lower, 'new message from the barangay');
+
     $summary['reports']++;
     $summary['pushesSent'] += dispatch_send(
         $conn,
         $list,
-        'Report Update',
-        dispatch_short((string) $row['message']),
-        ['type' => 'report_status', 'reportID' => (string) $row['reportID'], 'notifID' => $notifID]
+        $isMessage ? 'Message from your barangay' : 'Report Update',
+        dispatch_short($text),
+        [
+            'type' => $isMessage ? ($reportID !== '' ? 'report_message' : 'message') : 'report_status',
+            'reportID' => $reportID,
+            'notifID' => $notifID,
+        ]
     );
 }
 

@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:citisense/api_client.dart';
 import 'package:citisense/api_config.dart';
 import 'package:citisense/auth_session.dart';
-import 'package:citisense/barangay_messages_page.dart';
+import 'package:citisense/notification_router.dart';
 import 'package:citisense/friendly_errors.dart';
 import 'package:citisense/app_theme.dart';
 import 'package:citisense/live_updates.dart';
@@ -209,16 +209,20 @@ class _NotificationPageState extends State<NotificationPage>
       relativeTime(parseApiTime(timestamp));
 
   // Open what the notification is about, and mark it as read.
+  //   status update        -> that report's details (e.g. REP055)
+  //   message about report -> Messages, with that report selected
+  //   general message      -> Messages
+  //   announcement         -> that announcement's details
   void _onNotificationTap(Map<String, dynamic> item) {
     markAsRead(item);
 
-    if (item['kind'] == 'message') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => BarangayMessagesPage(userID: widget.userID),
-        ),
+    final target = NotificationTarget.fromNotificationItem(item);
+    if (target != null) {
+      NotificationRouter.attach(
+        userID: widget.userID,
+        barangayID: widget.barangayID,
       );
+      NotificationRouter.open(target);
     }
   }
 

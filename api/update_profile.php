@@ -3,7 +3,7 @@
 header("Content-Type: application/json");
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type, Accept");
+header("Access-Control-Allow-Headers: Content-Type, Accept, X-Auth-Token");
 
 if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
     http_response_code(200);
@@ -104,6 +104,16 @@ if (
         400
     );
 }
+
+
+/*
+|--------------------------------------------------------------------------
+| Only the logged-in user can change their own profile
+|--------------------------------------------------------------------------
+*/
+
+require_once __DIR__ . "/auth.php";
+citisense_require_user($conn, $userID);
 
 
 /*
@@ -439,39 +449,38 @@ if ($hasNewProfilePicture) {
 
 
     /*
-    | Create upload folder
+    | Upload folder: the same place as report photos, so the picture is
+    | served at <server>/uploads/profile/... (XAMPP: citisense/uploads,
+    | Railway: api/uploads, where the api folder is the web root).
+    | UPLOAD_ROOT can override both, e.g. a Railway volume.
     */
 
+    $parentUploads = dirname(__DIR__) . DIRECTORY_SEPARATOR . "uploads";
+
+    $uploadRoot = getenv("UPLOAD_ROOT") ?: (
+        is_dir($parentUploads)
+            ? $parentUploads
+            : __DIR__ . DIRECTORY_SEPARATOR . "uploads"
+    );
+
     $uploadDirectory =
-        __DIR__ . DIRECTORY_SEPARATOR .
-        ".." . DIRECTORY_SEPARATOR .
-        "uploads" . DIRECTORY_SEPARATOR .
+        rtrim($uploadRoot, "/\\") .
+        DIRECTORY_SEPARATOR .
         "profile";
 
-
-    if (!is_dir($uploadDirectory)) {
-
-        if (!mkdir(
-            $uploadDirectory,
-            0777,
-            true
-        )) {
-            sendResponse(
-                false,
-                "Failed to create profile upload folder.",
-                null,
-                500
-            );
-        }
+    if (!is_dir($uploadDirectory) && !mkdir($uploadDirectory, 0775, true) && !is_dir($uploadDirectory)) {
+        sendResponse(
+            false,
+            "Failed to create profile upload folder.",
+            null,
+            500
+        );
     }
 
 
     /*
-    | Make filename based on userID
-    |
-    | Example:
-    | USR001.jpg
-    | USR002.jpg
+    | A new file name for every upload (e.g. USR001_1764000000_a1b2c3.jpg).
+    | Reusing USR001.jpg made phones keep showing the old, cached picture.
     */
 
     $safeUserID = preg_replace(
@@ -481,7 +490,7 @@ if ($hasNewProfilePicture) {
     );
 
     $fileName =
-        $safeUserID . "." . $extension;
+        $safeUserID . "_" . time() . "_" . bin2hex(random_bytes(3)) . "." . $extension;
 
     $targetFile =
         $uploadDirectory .
@@ -490,43 +499,14 @@ if ($hasNewProfilePicture) {
 
 
     /*
-    | Remove old profile picture if it uses
-    | the same user ID but a different extension.
+    | Move uploaded file, then make sure it really is there.
     */
 
-    $possibleExtensions = [
-        "jpg",
-        "jpeg",
-        "png",
-        "webp"
-    ];
-
-    foreach ($possibleExtensions as $oldExtension) {
-
-        $possibleOldFile =
-            $uploadDirectory .
-            DIRECTORY_SEPARATOR .
-            $safeUserID .
-            "." .
-            $oldExtension;
-
-        if (
-            file_exists($possibleOldFile) &&
-            $possibleOldFile !== $targetFile
-        ) {
-            unlink($possibleOldFile);
-        }
-    }
-
-
-    /*
-    | Move uploaded file
-    */
-
-    if (!move_uploaded_file(
-        $file["tmp_name"],
-        $targetFile
-    )) {
+    if (
+        !move_uploaded_file($file["tmp_name"], $targetFile) ||
+        !is_file($targetFile) ||
+        filesize($targetFile) === 0
+    ) {
         sendResponse(
             false,
             "Failed to save the profile picture.",
@@ -548,26 +528,26 @@ if ($hasNewProfilePicture) {
 
 
     /*
-    | Remember old physical file so it can
-    | be deleted if the database update fails.
+    | Remember the old picture so it can be deleted once the database
+    | points to the new one (only files inside the profile folder).
     */
 
     if (
         $oldProfilePic !== null &&
-        trim($oldProfilePic) !== ""
+        str_starts_with(trim($oldProfilePic), "uploads/profile/")
     ) {
+        $oldCandidate = realpath(
+            $uploadDirectory . DIRECTORY_SEPARATOR . basename(trim($oldProfilePic))
+        );
+        $profileFolder = realpath($uploadDirectory);
 
-        $oldRelativePath =
-            str_replace(
-                "/",
-                DIRECTORY_SEPARATOR,
-                $oldProfilePic
-            );
-
-        $oldPhysicalFilePath =
-            dirname(__DIR__) .
-            DIRECTORY_SEPARATOR .
-            $oldRelativePath;
+        if (
+            $oldCandidate !== false &&
+            $profileFolder !== false &&
+            dirname($oldCandidate) === $profileFolder
+        ) {
+            $oldPhysicalFilePath = $oldCandidate;
+        }
     }
 }
 
@@ -658,6 +638,26 @@ $stmt->close();
 
 
 /*
+| Confirm the database now has the new picture before reporting success.
+*/
+
+if ($hasNewProfilePicture) {
+    $check = $conn->prepare("SELECT profilePic FROM users WHERE userID = ? LIMIT 1");
+    $check->bind_param("s", $userID);
+    $check->execute();
+    $savedPic = (string) ($check->get_result()->fetch_assoc()["profilePic"] ?? "");
+    $check->close();
+
+    if ($savedPic !== $newProfilePic) {
+        if ($newUploadedFilePath !== null && is_file($newUploadedFilePath)) {
+            @unlink($newUploadedFilePath);
+        }
+        sendResponse(false, "Failed to save the profile picture.", null, 500);
+    }
+}
+
+
+/*
 |--------------------------------------------------------------------------
 | Delete old physical profile picture
 |--------------------------------------------------------------------------
@@ -670,10 +670,10 @@ $stmt->close();
 if (
     $hasNewProfilePicture &&
     $oldPhysicalFilePath !== null &&
-    file_exists($oldPhysicalFilePath) &&
-    $oldPhysicalFilePath !== $newUploadedFilePath
+    is_file($oldPhysicalFilePath) &&
+    realpath($oldPhysicalFilePath) !== realpath((string) $newUploadedFilePath)
 ) {
-    unlink($oldPhysicalFilePath);
+    @unlink($oldPhysicalFilePath);
 }
 
 

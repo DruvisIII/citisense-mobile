@@ -131,3 +131,57 @@ function citisense_require_user(mysqli $conn, string $userID): void
         exit;
     }
 }
+
+/**
+ * userID of the session that sent this request, or null when the token
+ * is missing, unknown or expired. Refreshes the session's last use.
+ */
+function citisense_session_user(mysqli $conn): ?string
+{
+    $token = citisense_request_token();
+    if (!preg_match('/^[a-f0-9]{64}$/', $token)) {
+        return null;
+    }
+
+    citisense_ensure_sessions_table($conn);
+
+    $hash = hash('sha256', $token);
+    $stmt = $conn->prepare(
+        'SELECT userID FROM user_sessions
+         WHERE tokenHash = ?
+           AND lastUsedAt >= NOW() - INTERVAL ' . CITISENSE_SESSION_DAYS . ' DAY
+         LIMIT 1'
+    );
+    $stmt->bind_param('s', $hash);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$row) {
+        return null;
+    }
+
+    $stmt = $conn->prepare('UPDATE user_sessions SET lastUsedAt = NOW() WHERE tokenHash = ?');
+    $stmt->bind_param('s', $hash);
+    $stmt->execute();
+    $stmt->close();
+
+    return (string) $row['userID'];
+}
+
+/** Ends only the session that sent this request (logout on one phone). */
+function citisense_end_current_session(mysqli $conn): void
+{
+    $token = citisense_request_token();
+    if (!preg_match('/^[a-f0-9]{64}$/', $token)) {
+        return;
+    }
+
+    citisense_ensure_sessions_table($conn);
+
+    $hash = hash('sha256', $token);
+    $stmt = $conn->prepare('DELETE FROM user_sessions WHERE tokenHash = ?');
+    $stmt->bind_param('s', $hash);
+    $stmt->execute();
+    $stmt->close();
+}

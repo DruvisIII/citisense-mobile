@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -6,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'notification_preference.dart';
+import 'notification_router.dart';
 
 class PushNotificationService {
   PushNotificationService._();
@@ -35,7 +37,24 @@ class PushNotificationService {
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     );
 
-    await _localNotifications.initialize(settings: initializationSettings);
+    // Tapping a notification shown while the app was open opens what
+    // it is about.
+    await _localNotifications.initialize(
+      settings: initializationSettings,
+      onDidReceiveNotificationResponse: (response) =>
+          NotificationRouter.openPayload(response.payload),
+    );
+
+    // The app was closed and started by tapping one of those.
+    try {
+      final launch = await _localNotifications
+          .getNotificationAppLaunchDetails();
+      if (launch?.didNotificationLaunchApp == true) {
+        NotificationRouter.openPayload(launch?.notificationResponse?.payload);
+      }
+    } catch (error) {
+      debugPrint('CitiSense launch notification check failed: $error');
+    }
 
     final androidPlugin = _localNotifications
         .resolvePlatformSpecificImplementation<
@@ -100,6 +119,7 @@ class PushNotificationService {
           title: title,
           body: body,
           notificationDetails: details,
+          payload: message.data.isEmpty ? null : jsonEncode(message.data),
         );
         debugPrint('CitiSense foreground local notification displayed.');
       } catch (error) {
@@ -110,12 +130,16 @@ class PushNotificationService {
     _openedSubscription = FirebaseMessaging.onMessageOpenedApp.listen((
       message,
     ) {
+      // The app was in the background.
       debugPrint('CitiSense notification opened: ${message.messageId}');
+      NotificationRouter.openPushData(message.data);
     });
 
+    // The app was closed: it waits until Home is open (NotificationRouter).
     final initialMessage = await _messaging.getInitialMessage();
     if (initialMessage != null) {
       debugPrint('CitiSense launched by push: ${initialMessage.messageId}');
+      NotificationRouter.openPushData(initialMessage.data);
     }
 
     _initialized = true;

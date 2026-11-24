@@ -29,11 +29,12 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/time_helpers.php';
 require_once __DIR__ . '/conversation_common.php';
+require_once __DIR__ . '/media_common.php';
 
 function comments_respond(bool $success, string $message, int $status = 200, array $extra = []): never
 {
     http_response_code($status);
-    echo json_encode(['success' => $success, 'message' => $message] + $extra);
+    echo json_encode(['success' => $success, 'message' => $message] + $extra, JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -67,6 +68,8 @@ try {
             KEY idx_announcement_comments_announce (announceID)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+
+    conversation_ensure_utf8mb4($conn, ['announcement_comments']);
 
     $user = conversation_load_user($conn, $userID);
     if ($user === null) {
@@ -156,7 +159,11 @@ try {
     $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
 
-    $names = conversation_user_names($conn, array_column($rows, 'senderID'));
+    $senderIDs = array_column($rows, 'senderID');
+    $names = conversation_user_names($conn, $senderIDs);
+    // Each person's CURRENT profile picture, so a new picture also shows
+    // on their older comments.
+    $pictures = conversation_user_pictures($conn, $senderIDs);
     $parents = conversation_reply_parents(
         $conn,
         'announcement_comment',
@@ -168,31 +175,46 @@ try {
         $byID[(int) $row['commentID']] = $row;
     }
 
+    $displayName = static function (array $row) use ($names): string {
+        $name = $names[(string) $row['senderID']] ?? '';
+        if ($row['senderType'] === 'barangay') {
+            return $name !== '' ? $name : 'Barangay Official';
+        }
+        return $name !== '' ? $name : 'Resident';
+    };
+
     $comments = [];
     foreach ($rows as $row) {
         $id = (int) $row['commentID'];
         $fromBarangay = $row['senderType'] === 'barangay';
-        $name = $names[(string) $row['senderID']] ?? '';
 
+        // parentID: the comment this one answers (0 when it is not a reply,
+        // or when that comment was removed or hidden).
+        $parentID = $parents[$id] ?? 0;
         $replyToName = null;
-        $parentID = $parents[$id] ?? null;
-        if ($parentID !== null && isset($byID[$parentID])) {
+        $replyToText = null;
+        $parentMissing = false;
+        if ($parentID > 0 && isset($byID[$parentID])) {
             $parent = $byID[$parentID];
-            $replyToName = $parent['senderType'] === 'barangay'
-                ? 'Barangay'
-                : ($names[(string) $parent['senderID']] ?? 'Resident');
+            $replyToName = $displayName($parent);
+            $replyToText = conversation_preview((string) $parent['message'], 80);
+        } elseif ($parentID > 0) {
+            $parentMissing = true;
+            $parentID = 0;
         }
 
         $comments[] = [
             'id' => $id,
+            'parentID' => $parentID,
             'fromBarangay' => $fromBarangay,
             'isMine' => !$fromBarangay && (string) $row['senderID'] === $userID,
-            'name' => $fromBarangay
-                ? ($name !== '' ? $name . ' · Barangay' : 'Barangay Official')
-                : ($name !== '' ? $name : 'Resident'),
+            'name' => $displayName($row),
+            'avatar' => citisense_media_url($pictures[(string) $row['senderID']] ?? ''),
             'message' => (string) $row['message'],
             'hidden' => (int) $row['isHidden'] === 1,
             'replyToName' => $replyToName,
+            'replyToText' => $replyToText,
+            'parentMissing' => $parentMissing,
             'createdAt' => citisense_iso_time($conn, $row['created_at']),
         ];
     }

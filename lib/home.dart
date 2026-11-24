@@ -7,8 +7,10 @@ import 'package:citisense/announcement_details_page.dart';
 import 'package:citisense/api_client.dart';
 import 'package:citisense/barangay_messages_page.dart';
 import 'package:citisense/app_theme.dart';
+import 'package:citisense/auth_session.dart';
 import 'package:citisense/live_updates.dart';
 import 'package:citisense/mascot.dart';
+import 'package:citisense/notification_router.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:citisense/report_issue_overlay.dart';
@@ -124,12 +126,53 @@ class _HomePageState extends State<HomePage> {
       barangayID: widget.barangayID,
     );
     LiveUpdates.instance.changes.addListener(_onLiveUpdate);
+
+    // Notifications can now open reports and announcements (including a
+    // push that started the app).
+    NotificationRouter.attach(
+      userID: widget.userID,
+      barangayID: widget.barangayID,
+    );
   }
 
   @override
   void dispose() {
     LiveUpdates.instance.changes.removeListener(_onLiveUpdate);
     super.dispose();
+  }
+
+  /// Keeps the saved session in step with the latest profile, so the app
+  /// opens with the right name and picture next time.
+  void _saveSessionUser() {
+    final saved = AuthSession.user;
+    if (saved == null || saved.userID != widget.userID) return;
+    AuthSession.updateUser(
+      SessionUser(
+        userID: widget.userID,
+        firstName: _firstName,
+        lastName: _lastName,
+        email: _email,
+        contactNo: _contactNo,
+        profilePic: _profilePic,
+        barangayID: _barangayID,
+      ),
+    );
+  }
+
+  /// Settings saved new personal details (including a new picture).
+  void _onProfileUpdated(Map<String, dynamic> details) {
+    if (!mounted) return;
+    setState(() {
+      _firstName = details['firstName']?.toString() ?? _firstName;
+      _lastName = details['lastName']?.toString() ?? _lastName;
+      _email = details['email']?.toString() ?? _email;
+      _contactNo = details['contactNo']?.toString() ?? _contactNo;
+      final barangay = details['barangayID']?.toString() ?? '';
+      if (barangay.isNotEmpty) _barangayID = barangay;
+      final pic = details['profilePic']?.toString() ?? '';
+      if (pic.isNotEmpty) _profilePic = pic;
+    });
+    _saveSessionUser();
   }
 
   void _onLiveUpdate() {
@@ -226,6 +269,9 @@ class _HomePageState extends State<HomePage> {
         _errorMessage = null;
       });
 
+      _saveSessionUser();
+      NotificationRouter.attach(userID: widget.userID, barangayID: _barangayID);
+
       // Refresh announcements only if the profile changed the barangay.
       if (latestBarangayID.isNotEmpty &&
           latestBarangayID != widget.barangayID) {
@@ -243,19 +289,21 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _userID = widget.userID;
 
-        _firstName = widget.firstName.trim();
+        // Keep details already shown (e.g. just saved in Settings).
+        if (_firstName.trim().isEmpty) _firstName = widget.firstName.trim();
 
         if (_firstName.isEmpty) {
           _firstName = 'User';
         }
 
-        _lastName = widget.lastName;
+        if (_lastName.isEmpty) _lastName = widget.lastName;
 
-        _email = widget.email;
+        if (_email.isEmpty) _email = widget.email;
 
-        _contactNo = widget.contactNo;
+        if (_contactNo.isEmpty) _contactNo = widget.contactNo;
 
-        _profilePic = widget.profilePic;
+        // Keep a picture saved in Settings during this visit.
+        _profilePic ??= widget.profilePic;
 
         // Preserve whatever other requests have already loaded.
         if (_barangayID.isEmpty) _barangayID = widget.barangayID;
@@ -485,70 +533,82 @@ class _HomePageState extends State<HomePage> {
         contactNo: _contactNo,
         profilePic: _profilePic,
         barangayID: _barangayID,
+        onProfileUpdated: _onProfileUpdated,
       ),
     ];
 
-    return Scaffold(
-      backgroundColor: backgroundColor,
+    // Back button: from another tab go to Home first; on Home, leave the
+    // app (Home is the first page, so Log In is never shown). The user
+    // stays logged in until they choose Log Out.
+    return PopScope(
+      canPop: _selectedIndex == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _selectedIndex != 0) _onItemTapped(0);
+      },
+      child: Scaffold(
+        backgroundColor: backgroundColor,
 
-      // ========================================================
-      // BODY
-      // ========================================================
-      body: SafeArea(
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: primaryBlue))
-            : _errorMessage != null
-            ? _buildErrorPage()
-            : IndexedStack(index: _selectedIndex, children: pages),
-      ),
-
-      // ========================================================
-      // BOTTOM NAVIGATION
-      // ========================================================
-      bottomNavigationBar: DecoratedBox(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: AppColors.divider)),
+        // ========================================================
+        // BODY
+        // ========================================================
+        body: SafeArea(
+          child: _isLoading
+              ? const Center(
+                  child: CircularProgressIndicator(color: primaryBlue),
+                )
+              : _errorMessage != null
+              ? _buildErrorPage()
+              : IndexedStack(index: _selectedIndex, children: pages),
         ),
-        child: BottomNavigationBar(
-          currentIndex: _selectedIndex,
-          onTap: _onItemTapped,
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          selectedItemColor: AppColors.primary,
-          unselectedItemColor: textGrey,
-          selectedFontSize: 12,
-          unselectedFontSize: 12,
-          selectedLabelStyle: const TextStyle(
-            fontWeight: FontWeight.w700,
-            fontFamily: appHeadingFontFamily,
+
+        // ========================================================
+        // BOTTOM NAVIGATION
+        // ========================================================
+        bottomNavigationBar: DecoratedBox(
+          decoration: const BoxDecoration(
+            border: Border(top: BorderSide(color: AppColors.divider)),
           ),
-          unselectedLabelStyle: const TextStyle(
-            fontWeight: FontWeight.w600,
-            fontFamily: appHeadingFontFamily,
+          child: BottomNavigationBar(
+            currentIndex: _selectedIndex,
+            onTap: _onItemTapped,
+            type: BottomNavigationBarType.fixed,
+            backgroundColor: Colors.white,
+            selectedItemColor: AppColors.primary,
+            unselectedItemColor: textGrey,
+            selectedFontSize: 12,
+            unselectedFontSize: 12,
+            selectedLabelStyle: const TextStyle(
+              fontWeight: FontWeight.w700,
+              fontFamily: appHeadingFontFamily,
+            ),
+            unselectedLabelStyle: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontFamily: appHeadingFontFamily,
+            ),
+            elevation: 0,
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.home_outlined),
+                activeIcon: Icon(Icons.home),
+                label: 'Home',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.assignment_outlined),
+                activeIcon: Icon(Icons.assignment),
+                label: 'My Reports',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.notifications_none),
+                activeIcon: Icon(Icons.notifications),
+                label: 'Notifications',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.settings_outlined),
+                activeIcon: Icon(Icons.settings),
+                label: 'Settings',
+              ),
+            ],
           ),
-          elevation: 0,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home),
-              label: 'Home',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.assignment_outlined),
-              activeIcon: Icon(Icons.assignment),
-              label: 'My Reports',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.notifications_none),
-              activeIcon: Icon(Icons.notifications),
-              label: 'Notifications',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.settings_outlined),
-              activeIcon: Icon(Icons.settings),
-              label: 'Settings',
-            ),
-          ],
         ),
       ),
     );
