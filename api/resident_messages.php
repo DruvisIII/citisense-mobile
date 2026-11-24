@@ -501,6 +501,7 @@ try {
 
     $extra = [
         'barangayName' => $barangayName,
+        'serverTime' => citisense_server_time($conn),
         'data' => $messages,
     ];
 

@@ -97,7 +97,15 @@ class PushNotificationService {
       final body =
           notification?.body ?? 'You have a new update to your report.';
 
-      const details = NotificationDetails(
+      // Show when it was actually sent (the server's time), not when
+      // the phone happened to receive it.
+      final sentAt = DateTime.tryParse(
+        message.data['sentAt']?.toString() ?? '',
+      );
+      final when =
+          (sentAt ?? message.sentTime ?? DateTime.now()).millisecondsSinceEpoch;
+
+      final details = NotificationDetails(
         android: AndroidNotificationDetails(
           'citisense_updates',
           'CitiSense Updates',
@@ -107,6 +115,8 @@ class PushNotificationService {
           playSound: true,
           enableVibration: true,
           icon: '@mipmap/ic_launcher',
+          when: when,
+          showWhen: true,
         ),
       );
 

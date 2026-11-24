@@ -15,6 +15,7 @@ import 'package:http/http.dart' as http;
 
 import 'package:citisense/report_issue_overlay.dart';
 import 'package:citisense/settings_page.dart';
+import 'package:citisense/ui_components.dart';
 import 'package:citisense/my_reports.dart';
 import 'package:citisense/notification_page.dart';
 
@@ -419,6 +420,8 @@ class _HomePageState extends State<HomePage> {
         throw Exception(decoded['message'] ?? 'Unable to load announcements.');
       }
 
+      ServerClock.syncFromBody(decoded);
+
       final List<dynamic> data = decoded['data'] ?? [];
 
       final List<Map<String, dynamic>> loadedAnnouncements = data
@@ -520,7 +523,11 @@ class _HomePageState extends State<HomePage> {
         barangayName: _barangayName,
       ),
 
-      NotificationPage(userID: _userID, barangayID: _barangayID),
+      NotificationPage(
+        userID: _userID,
+        barangayID: _barangayID,
+        barangayName: _barangayName,
+      ),
 
       // ========================================================
       // SETTINGS PAGE
@@ -533,6 +540,7 @@ class _HomePageState extends State<HomePage> {
         contactNo: _contactNo,
         profilePic: _profilePic,
         barangayID: _barangayID,
+        barangayName: _barangayName,
         onProfileUpdated: _onProfileUpdated,
       ),
     ];
@@ -636,110 +644,17 @@ class _HomePageState extends State<HomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.location_on, color: primaryBlue, size: 32),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _barangayName.isNotEmpty
-                              ? 'Barangay $_barangayName'
-                              : 'Your Barangay',
-                          style: const TextStyle(
-                            fontSize: 19,
-                            fontWeight: FontWeight.w800,
-                            color: darkBlue,
-                            fontFamily: appHeadingFontFamily,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        const Text(
-                          'Cebu City',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: textGrey,
-                            fontFamily: appFontFamily,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 15),
-              SizedBox(
-                height: 190,
-                width: double.infinity,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Positioned(
-                      left: 0,
-                      top: 12,
-                      right: 0,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            greeting,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: textGrey,
-                              fontFamily: appFontFamily,
-                            ),
-                          ),
-                          const SizedBox(height: 1),
-                          SizedBox(
-                            width: constraints.maxWidth * .53,
-                            child: Text(
-                              '${_firstName.isNotEmpty ? _firstName : 'User'}!',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 41,
-                                height: 1.12,
-                                fontWeight: FontWeight.w900,
-                                color: darkBlue,
-                                fontFamily: appHeadingFontFamily,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 13),
-                          SizedBox(
-                            width: constraints.maxWidth * .46,
-                            child: const Text(
-                              'Let’s work together for a safer and cleaner community.',
-                              style: TextStyle(
-                                fontSize: 14,
-                                height: 1.55,
-                                color: textGrey,
-                                fontFamily: appFontFamily,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Positioned(
-                      right: -10,
-                      bottom: -4,
-                      child: SizedBox(
-                        width: constraints.maxWidth * .40,
-                        height: 188,
-                        child: CitiMascot(
-                          pose: MascotPose.wave,
-                          playToken: _waveToken,
-                          // Community scene behind the waving mascot.
-                          backdrop: true,
-                        ),
-                      ),
-                    ),
-                  ],
+              CitiPageHeader(
+                barangayName: _barangayName,
+                eyebrow: greeting,
+                title: '${_firstName.isNotEmpty ? _firstName : 'User'}!',
+                description:
+                    'Let’s work together for a safer and cleaner community.',
+                mascot: CitiMascot(
+                  pose: MascotPose.wave,
+                  playToken: _waveToken,
+                  // Community scene behind the waving mascot.
+                  backdrop: true,
                 ),
               ),
               const SizedBox(height: 16),

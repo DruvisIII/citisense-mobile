@@ -56,6 +56,7 @@ class ApiClient {
       }
 
       final bool ok = response.statusCode == 200 && body['success'] == true;
+      if (ok) ServerClock.syncFromBody(body);
       final bool expired =
           response.statusCode == 401 || body['code'] == 'SESSION_EXPIRED';
       if (expired && AuthSession.isLoggedIn) onSessionExpired?.call();
@@ -86,29 +87,64 @@ DateTime? parseApiTime(dynamic value) {
   return DateTime.tryParse(text)?.toLocal();
 }
 
-/// "Just now", "5 minutes ago", "2 hours ago", "Yesterday", "3 days ago",
-/// then a date such as "Nov 23, 2026".
+// ============================================================
+// SERVER CLOCK
+// ------------------------------------------------------------
+// Lists from the API include "serverTime" (the database's NOW()).
+// How old an item is = server time - item time, both from the same
+// clock, so a phone with a wrong clock or time zone (or a database
+// whose time zone was read wrong) still shows "5 minutes ago".
+// ============================================================
+
+class ServerClock {
+  ServerClock._();
+
+  /// Phone time minus server time (positive when the phone is ahead).
+  static Duration _offset = Duration.zero;
+
+  static Duration get offset => _offset;
+
+  /// Reads "serverTime" from an API response body, if present.
+  static void syncFromBody(dynamic body) {
+    if (body is! Map) return;
+    final server = parseApiTime(body['serverTime']);
+    if (server == null) return;
+    _offset = DateTime.now().difference(server);
+  }
+
+  /// "Now" on the server's clock, in the phone's time zone.
+  static DateTime now() => DateTime.now().subtract(_offset);
+
+  /// For tests.
+  static void reset() => _offset = Duration.zero;
+}
+
+/// "Just now", "5 minutes ago", "3 hours ago" (anything under a day),
+/// "Yesterday", "3 days ago", then a date such as "Nov 23, 2026".
 String relativeTime(DateTime? time, {DateTime? now}) {
   if (time == null) return '';
-  final current = now ?? DateTime.now();
+  final current = now ?? ServerClock.now();
   final local = time.toLocal();
   final difference = current.difference(local);
 
+  // A time slightly in the future (clocks a few seconds apart) is "now".
   if (difference.isNegative || difference.inSeconds < 60) return 'Just now';
   if (difference.inMinutes < 60) {
     final m = difference.inMinutes;
     return m == 1 ? '1 minute ago' : '$m minutes ago';
+  }
+  // Under a day is always counted in hours, so something from 1 hour
+  // ago is never called "Yesterday" just because midnight passed.
+  if (difference.inHours < 24) {
+    final h = difference.inHours;
+    return h == 1 ? '1 hour ago' : '$h hours ago';
   }
 
   final today = DateTime(current.year, current.month, current.day);
   final day = DateTime(local.year, local.month, local.day);
   final calendarDays = today.difference(day).inDays;
 
-  if (calendarDays == 0) {
-    final h = difference.inHours;
-    return h == 1 ? '1 hour ago' : '$h hours ago';
-  }
-  if (calendarDays == 1) return 'Yesterday';
+  if (calendarDays <= 1) return 'Yesterday';
   if (calendarDays < 7) return '$calendarDays days ago';
 
   const months = [

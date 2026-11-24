@@ -131,3 +131,8 @@ flutter:
           weight: 600
         - asset: assets/fonts/Quicksand-Bold.ttf
           weight: 700
+    # Color emoji, so newer emoji show on phones whose system font lacks
+    # them (instead of empty boxes).
+    - family: NotoColorEmoji
+      fonts:
+        - asset: assets/fonts/NotoColorEmoji.ttf

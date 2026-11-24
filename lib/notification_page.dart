@@ -7,6 +7,7 @@ import 'package:citisense/auth_session.dart';
 import 'package:citisense/notification_router.dart';
 import 'package:citisense/friendly_errors.dart';
 import 'package:citisense/app_theme.dart';
+import 'package:citisense/ui_components.dart';
 import 'package:citisense/live_updates.dart';
 import 'package:citisense/mascot.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -17,10 +18,14 @@ class NotificationPage extends StatefulWidget {
   final String userID;
   final String barangayID;
 
+  /// Shown in the page header, like on Home.
+  final String barangayName;
+
   const NotificationPage({
     super.key,
     required this.userID,
     required this.barangayID,
+    this.barangayName = '',
   });
 
   @override
@@ -38,6 +43,9 @@ class _NotificationPageState extends State<NotificationPage>
   List<Map<String, dynamic>> notifications = [];
 
   StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
+
+  // Redraws "5 minutes ago" labels as time passes.
+  Timer? _clockTick;
   StreamSubscription<RemoteMessage>? _openedAppSubscription;
 
   // Builds API URLs consistently for local and Railway servers.
@@ -56,6 +64,9 @@ class _NotificationPageState extends State<NotificationPage>
 
     WidgetsBinding.instance.addObserver(this);
     fetchNotifications();
+    _clockTick = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
 
     _foregroundMessageSubscription = FirebaseMessaging.onMessage.listen(
       _onFirebaseMessage,
@@ -100,6 +111,7 @@ class _NotificationPageState extends State<NotificationPage>
   @override
   void dispose() {
     LiveUpdates.instance.changes.removeListener(_onLiveUpdate);
+    _clockTick?.cancel();
     _foregroundMessageSubscription?.cancel();
     _openedAppSubscription?.cancel();
 
@@ -154,6 +166,9 @@ class _NotificationPageState extends State<NotificationPage>
       if (response.statusCode != 200 || result?['success'] != true) {
         throw Exception(FriendlyErrors.fromResponse(response));
       }
+
+      // Ages are measured on the server's clock (see ServerClock).
+      ServerClock.syncFromBody(result);
 
       final List<dynamic> data = result!['data'] is List
           ? result['data'] as List
@@ -343,71 +358,33 @@ class _NotificationPageState extends State<NotificationPage>
           children: [
             _buildHeader(),
             _buildTabsPanel(),
-            Expanded(child: _buildNotificationList()),
+            // The list fades into the newly chosen tab.
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: AppMotion.toggle,
+                switchInCurve: AppMotion.curve,
+                switchOutCurve: Curves.easeInCubic,
+                child: KeyedSubtree(
+                  key: ValueKey<String>(selectedTab),
+                  child: _buildNotificationList(),
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  // Shared header geometry for Notifications and Settings.
+  // Same header as Home: same slots, sizes and spacing on every page.
   Widget _buildHeader() {
-    return SizedBox(
-      width: double.infinity,
-      height: 222,
-      child: LayoutBuilder(
-        builder: (context, constraints) => Stack(
-          children: [
-            Positioned(
-              left: 22,
-              right: 22,
-              top: 38,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Notifications',
-                    maxLines: 1,
-                    softWrap: false,
-                    style: const TextStyle(
-                      fontFamily: appHeadingFontFamily,
-                      fontSize: 37,
-                      fontWeight: FontWeight.w800,
-                      height: 1.15,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 22,
-              top: 109,
-              width: (constraints.maxWidth - 44) * 0.55,
-              child: Text(
-                'Stay updated with your reports and announcements.',
-                style: const TextStyle(
-                  fontFamily: appFontFamily,
-                  fontSize: 16,
-                  height: 1.5,
-                  color: textGrey,
-                ),
-              ),
-            ),
-            Positioned(
-              right: 18,
-              top: 84,
-              bottom: 6,
-              width: (constraints.maxWidth - 44) * 0.40,
-              child: const CitiMascot(
-                pose: MascotPose.notification,
-                backdrop: true,
-              ),
-            ),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      child: CitiPageHeader(
+        barangayName: widget.barangayName,
+        title: 'Notifications',
+        description: 'Stay updated with your reports and announcements.',
+        mascot: const CitiMascot(pose: MascotPose.notification, backdrop: true),
       ),
     );
   }
@@ -417,19 +394,13 @@ class _NotificationPageState extends State<NotificationPage>
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-              boxShadow: AppShadows.soft,
+          SlidingToggle(
+            labels: const ['All', 'Announcements'],
+            selectedIndex: selectedTab == 'all' ? 0 : 1,
+            onChanged: (index) => setState(
+              () => selectedTab = index == 0 ? 'all' : 'announcements',
             ),
-            child: Row(
-              children: [
-                _buildTab(label: 'All', value: 'all'),
-                _buildTab(label: 'Announcements', value: 'announcements'),
-              ],
-            ),
+            boxShadow: AppShadows.soft,
           ),
           SizedBox(
             height: 40,
@@ -460,36 +431,6 @@ class _NotificationPageState extends State<NotificationPage>
                 : null,
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildTab({required String label, required String value}) {
-    final selected = selectedTab == value;
-
-    return Expanded(
-      child: InkWell(
-        onTap: () => setState(() => selectedTab = value),
-        borderRadius: BorderRadius.circular(14),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 2),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Text(
-            label,
-            maxLines: 1,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: appHeadingFontFamily,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: selected ? Colors.white : textGrey,
-            ),
-          ),
-        ),
       ),
     );
   }

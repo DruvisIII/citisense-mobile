@@ -45,6 +45,8 @@ class NotificationTarget {
 
     switch (type) {
       case 'announcement':
+      // An administrator edited it: open the same details page.
+      case 'announcement_updated':
         return announceID.isEmpty
             ? null
             : NotificationTarget(

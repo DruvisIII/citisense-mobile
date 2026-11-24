@@ -220,6 +220,7 @@ try {
     }
 
     comments_respond(true, $action === 'add' ? 'Your comment was posted.' : 'Comments loaded.', 200, [
+        'serverTime' => citisense_server_time($conn),
         'data' => $comments,
     ]);
 } catch (Throwable $e) {
