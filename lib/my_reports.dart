@@ -4,6 +4,8 @@ import 'dart:convert';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:citisense/app_theme.dart';
 import 'package:citisense/ui_components.dart';
 import 'package:citisense/live_updates.dart';
@@ -65,6 +67,134 @@ String _getEffectiveReportStatusID(Map<String, dynamic> report) {
   }
 
   return DateTime.now().isAfter(timeline) ? 'STAT004' : statusID;
+}
+
+// ============================================================
+// REPORT CATEGORY, STATUS AND ADDRESS (shared by the list and details)
+// ============================================================
+
+/// How a report category looks: its own icon and color, so the type is
+/// recognizable by the icon as well as the color.
+class ReportCategoryStyle {
+  const ReportCategoryStyle({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.softColor,
+  });
+
+  /// Category name without the word "Report" ("Waste Accumulation").
+  final String label;
+  final IconData icon;
+  final Color color;
+  final Color softColor;
+
+  static ReportCategoryStyle of(Map<String, dynamic> report) {
+    final name = (report['categoryName']?.toString() ?? '').trim();
+    final lower = name.toLowerCase();
+
+    if (lower.contains('waste') ||
+        lower.contains('garbage') ||
+        lower.contains('trash')) {
+      return ReportCategoryStyle(
+        label: name.isEmpty ? 'Waste Accumulation' : name,
+        icon: Icons.delete_outline_rounded,
+        color: AppColors.primary,
+        softColor: AppColors.primarySoft,
+      );
+    }
+    if (lower.contains('pothole') || lower.contains('road')) {
+      return ReportCategoryStyle(
+        label: name.isEmpty ? 'Pothole' : name,
+        icon: Icons.edit_road_rounded,
+        color: AppColors.accent,
+        softColor: AppColors.accentSoft,
+      );
+    }
+    return ReportCategoryStyle(
+      label: name.isEmpty || lower == 'others' || lower == 'other'
+          ? 'Other Issue'
+          : name,
+      icon: Icons.more_horiz_rounded,
+      color: const Color(0xFF64748B),
+      softColor: const Color(0xFFEEF1F5),
+    );
+  }
+}
+
+/// Current status label and color ("Pending", "Ongoing", "Resolved").
+({String label, Color color}) reportStatusOf(Map<String, dynamic> report) {
+  switch (_getEffectiveReportStatusID(report)) {
+    case 'STAT001':
+      return (label: 'Pending', color: AppColors.warning);
+    case 'STAT002':
+      return (label: 'Ongoing', color: AppColors.primary);
+    case 'STAT003':
+      return (label: 'Resolved', color: AppColors.success);
+    case 'STAT004':
+      return (label: 'Overdue', color: AppColors.danger);
+  }
+  final shown = report['displayStatus']?.toString().trim() ?? '';
+  return (
+    label: shown.isEmpty ? 'Unknown' : shown,
+    color: AppColors.textSecondary,
+  );
+}
+
+/// A short place name from a full address, e.g.
+/// "To-ong Pardo, 7VQ8+JMW To-ong Pardo, Cebu City, Central Visayas,
+/// Philippines" -> "To-ong Pardo, Cebu City".
+String shortReportAddress(String? address) {
+  final full = address?.trim() ?? '';
+  if (full.isEmpty) return 'Location unavailable';
+
+  final plusCode = RegExp(
+    r'\b[23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,3}\b',
+  );
+  final parts = <String>[];
+  for (final raw in full.split(',')) {
+    final part = raw.replaceAll(plusCode, '').trim();
+    if (part.isEmpty) continue;
+    if (parts.any((p) => p.toLowerCase() == part.toLowerCase())) continue;
+    parts.add(part);
+  }
+  if (parts.isEmpty) return full;
+
+  final city = parts
+      .skip(1)
+      .firstWhere(
+        (p) => RegExp(
+          r'\b(city|municipality)\b',
+          caseSensitive: false,
+        ).hasMatch(p),
+        orElse: () => parts.length > 1 ? parts[1] : '',
+      );
+  return city.isEmpty ? parts.first : '${parts.first}, $city';
+}
+
+/// "Nov 24, 3:19 AM".
+String shortReportDateTime(dynamic value) {
+  final date = _parseReportDateTime(value);
+  if (date == null) return 'Date unavailable';
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final hour = date.hour % 12 == 0 ? 12 : date.hour % 12;
+  final minute = date.minute.toString().padLeft(2, '0');
+  final period = date.hour >= 12 ? 'PM' : 'AM';
+  final year = date.year == DateTime.now().year ? '' : ' ${date.year}';
+  return '${months[date.month - 1]} ${date.day}$year, $hour:$minute $period';
 }
 
 class MyReportsPage extends StatefulWidget {
@@ -312,36 +442,6 @@ class _MyReportsPageState extends State<MyReportsPage> {
     );
   }
 
-  String _getCategoryName(Map<String, dynamic> report) {
-    final category = report['categoryName']?.toString() ?? '';
-
-    if (category.isEmpty) {
-      return 'OTHER';
-    }
-
-    return category.toUpperCase();
-  }
-
-  String _getTitle(Map<String, dynamic> report) {
-    final title = report['title']?.toString() ?? '';
-
-    if (title.isEmpty) {
-      return 'Report';
-    }
-
-    return title;
-  }
-
-  String _getAddress(Map<String, dynamic> report) {
-    final address = report['address']?.toString() ?? '';
-
-    if (address.isEmpty) {
-      return 'Address unavailable';
-    }
-
-    return address;
-  }
-
   String? _getImageUrl(Map<String, dynamic> report) {
     final imagePath = report['imagePath']?.toString().trim();
 
@@ -358,104 +458,6 @@ class _MyReportsPageState extends State<MyReportsPage> {
     }
 
     return '$serverBaseUrl/$imagePath';
-  }
-
-  String _formatDate(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Unknown date';
-    }
-
-    try {
-      final date = DateTime.parse(value).toLocal();
-
-      const months = [
-        'January',
-        'February',
-        'March',
-        'April',
-        'May',
-        'June',
-        'July',
-        'August',
-        'September',
-        'October',
-        'November',
-        'December',
-      ];
-
-      return '${months[date.month - 1]} '
-          '${date.day.toString().padLeft(2, '0')}, '
-          '${date.year}';
-    } catch (e) {
-      return value;
-    }
-  }
-
-  String _formatTime(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Unknown time';
-    }
-
-    try {
-      final date = DateTime.parse(value).toLocal();
-
-      int hour = date.hour;
-      final minute = date.minute;
-
-      final period = hour >= 12 ? 'PM' : 'AM';
-
-      if (hour == 0) {
-        hour = 12;
-      } else if (hour > 12) {
-        hour -= 12;
-      }
-
-      return '$hour:${minute.toString().padLeft(2, '0')} $period';
-    } catch (e) {
-      return value;
-    }
-  }
-
-  String _getStatusText(Map<String, dynamic> report) {
-    final statusID = _getEffectiveStatusID(report);
-
-    switch (statusID) {
-      case 'STAT001':
-        return 'PENDING';
-
-      case 'STAT002':
-        return 'IN PROGRESS';
-
-      case 'STAT003':
-        return 'COMPLETE';
-
-      case 'STAT004':
-        return 'OVERDUE';
-
-      default:
-        return report['displayStatus']?.toString().toUpperCase() ?? 'UNKNOWN';
-    }
-  }
-
-  Color _getStatusColor(Map<String, dynamic> report) {
-    final statusID = _getEffectiveStatusID(report);
-
-    switch (statusID) {
-      case 'STAT001':
-        return AppColors.warning;
-
-      case 'STAT002':
-        return primaryBlue;
-
-      case 'STAT003':
-        return AppColors.success;
-
-      case 'STAT004':
-        return AppColors.danger;
-
-      default:
-        return textGrey;
-    }
   }
 
   Future<void> _openReportDetails(Map<String, dynamic> report) async {
@@ -484,9 +486,7 @@ class _MyReportsPageState extends State<MyReportsPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildTopSection(),
-                const SizedBox(height: 18),
-                _buildReportsHeading(),
-                const SizedBox(height: 18),
+                const SizedBox(height: 14),
                 _buildFilterButtons(),
                 const SizedBox(height: 12),
                 _buildSearchBar(),
@@ -531,21 +531,19 @@ class _MyReportsPageState extends State<MyReportsPage> {
   }
 
   Widget _buildTopSection() {
-    // Same header as Home (and Notifications / Settings).
-    final hour = DateTime.now().hour;
-    final greeting = hour < 12
-        ? 'Good morning,'
-        : hour < 17
-        ? 'Good afternoon,'
-        : 'Good evening,';
-
+    // Same header as Home, Notifications and Settings: own title, no
+    // greeting or barangay.
+    final count = _reports.length;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      padding: const EdgeInsets.fromLTRB(20, CitiPageHeader.topPadding, 20, 0),
       child: CitiPageHeader(
-        barangayName: widget.barangayName,
-        eyebrow: greeting,
-        title: '${widget.firstName.isNotEmpty ? widget.firstName : 'User'}!',
-        description: 'Let’s work together for a safer and cleaner community.',
+        eyebrow: _isLoading && count == 0
+            ? null
+            : count == 1
+            ? '1 report'
+            : '$count reports',
+        title: 'My Reports',
+        description: 'Track the status of your submitted reports.',
         mascot: _buildMascot(),
       ),
     );
@@ -554,56 +552,6 @@ class _MyReportsPageState extends State<MyReportsPage> {
   Widget _buildMascot() {
     // Mascot writing a report on a clipboard (loops).
     return const CitiMascot(pose: MascotPose.report, backdrop: true);
-  }
-
-  Widget _buildReportsHeading() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          Container(
-            width: 57,
-            height: 57,
-            decoration: BoxDecoration(
-              color: AppColors.primarySoft,
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              border: Border.all(color: AppColors.primaryBorder),
-            ),
-            child: const Icon(
-              Icons.assignment_outlined,
-              size: 31,
-              color: primaryBlue,
-            ),
-          ),
-          const SizedBox(width: 13),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
-                  'My Reports',
-                  style: TextStyle(
-                    fontFamily: appHeadingFontFamily,
-                    color: darkBlue,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                SizedBox(height: 3),
-                Text(
-                  'Track the status of your submitted reports.',
-                  style: TextStyle(
-                    fontFamily: appFontFamily,
-                    color: textGrey,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildFilterButtons() {
@@ -692,183 +640,174 @@ class _MyReportsPageState extends State<MyReportsPage> {
     );
   }
 
+  // Card: photo with the category icon, status, category name, a short
+  // location and the date, so reports of the same type are easy to tell
+  // apart.
   Widget _buildReportCard(Map<String, dynamic> report) {
     final imageUrl = _getImageUrl(report);
-    final statusColor = _getStatusColor(report);
-    final category = _getCategoryName(report);
-    final categoryIsPothole = category.toLowerCase().contains('pothole');
-    final categoryColor = categoryIsPothole ? AppColors.accent : primaryBlue;
-    return InkWell(
-      onTap: () => _openReportDetails(report),
+    final category = ReportCategoryStyle.of(report);
+    final status = reportStatusOf(report);
+    final reportID = report['reportID']?.toString() ?? '';
+
+    return Material(
+      color: Colors.white,
       borderRadius: BorderRadius.circular(AppRadius.lg),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          boxShadow: AppShadows.card,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              child: SizedBox(
-                width: 104,
-                height: 144,
-                child: imageUrl == null
-                    ? _buildImagePlaceholder()
-                    : Image.network(
-                        imageUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) =>
-                            _buildImagePlaceholder(),
+      child: InkWell(
+        onTap: () => _openReportDetails(report),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            boxShadow: AppShadows.card,
+            color: Colors.white,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 92,
+                height: 92,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        child: imageUrl == null
+                            ? _categoryPlaceholder(category)
+                            : Image.network(
+                                imageUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    _categoryPlaceholder(category),
+                              ),
                       ),
-              ),
-            ),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: categoryColor.withValues(alpha: .09),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            category,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontFamily: appHeadingFontFamily,
-                              color: categoryColor,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 5),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha: .11),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          _getStatusText(report),
-                          maxLines: 1,
-                          style: TextStyle(
-                            fontFamily: appHeadingFontFamily,
-                            color: statusColor,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _getTitle(report),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontFamily: appHeadingFontFamily,
-                      color: darkBlue,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      height: 1.2,
                     ),
-                  ),
-                  const SizedBox(height: 9),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.location_on_outlined,
-                        size: 17,
-                        color: textGrey,
-                      ),
-                      const SizedBox(width: 5),
-                      Expanded(
-                        child: Text(
-                          _getAddress(report),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontFamily: appFontFamily,
-                            color: textGrey,
-                            fontSize: 12,
+                    // Category icon (color + its own icon).
+                    Positioned(
+                      left: -6,
+                      top: -6,
+                      child: Tooltip(
+                        message: category.label,
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: category.color,
+                            borderRadius: BorderRadius.circular(9),
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: Icon(
+                            category.icon,
+                            size: 17,
+                            color: Colors.white,
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.calendar_month_outlined,
-                        size: 16,
-                        color: textGrey,
-                      ),
-                      const SizedBox(width: 5),
-                      Expanded(
-                        child: Text(
-                          '${_formatDate(report['dateReported']?.toString())}  •  ${_formatTime(report['dateReported']?.toString())}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontFamily: appFontFamily,
-                            color: textGrey,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  const Row(
-                    children: [
-                      Text(
-                        'View Details',
-                        style: TextStyle(
-                          fontFamily: appHeadingFontFamily,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: primaryBlue,
-                        ),
-                      ),
-                      SizedBox(width: 7),
-                      Icon(Icons.arrow_forward, color: primaryBlue, size: 18),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _statusChip(status.label, status.color),
+                        const Spacer(),
+                        Text(
+                          reportID,
+                          style: const TextStyle(
+                            fontFamily: appFontFamily,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 7),
+                    Text(
+                      category.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: appHeadingFontFamily,
+                        color: darkBlue,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    _cardInfo(
+                      Icons.location_on_outlined,
+                      shortReportAddress(report['address']?.toString()),
+                    ),
+                    const SizedBox(height: 4),
+                    _cardInfo(
+                      Icons.schedule_rounded,
+                      shortReportDateTime(report['dateReported']),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildImagePlaceholder() {
+  Widget _statusChip(String label, Color color) {
     return Container(
-      color: AppColors.primarySoft,
-      child: const Center(
-        child: Icon(Icons.image_outlined, size: 38, color: primaryBlue),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(20),
       ),
+      child: Text(
+        label,
+        maxLines: 1,
+        style: TextStyle(
+          fontFamily: appHeadingFontFamily,
+          color: color,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  Widget _cardInfo(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 15, color: textGrey),
+        const SizedBox(width: 5),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontFamily: appFontFamily,
+              color: textGrey,
+              fontSize: 12.5,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _categoryPlaceholder(ReportCategoryStyle category) {
+    return Container(
+      color: category.softColor,
+      alignment: Alignment.center,
+      child: Icon(category.icon, size: 36, color: category.color),
     );
   }
 
@@ -1073,48 +1012,29 @@ class ReportDetailsPage extends StatelessWidget {
     return _getEffectiveReportStatusID(report);
   }
 
-  String _getStatusText() {
-    switch (_getEffectiveStatusID()) {
-      case 'STAT001':
-        return 'PENDING';
-
-      case 'STAT002':
-        return 'IN PROGRESS';
-
-      case 'STAT003':
-        return 'COMPLETE';
-
-      case 'STAT004':
-        return 'OVERDUE';
-
-      default:
-        return report['displayStatus']?.toString().toUpperCase() ?? 'UNKNOWN';
+  /// The report's map position, or null when it has none.
+  LatLng? _getPoint() {
+    final lat = double.tryParse(report['latitude']?.toString() ?? '');
+    final lng = double.tryParse(report['longitude']?.toString() ?? '');
+    if (lat == null || lng == null) return null;
+    if (lat.abs() > 90 || lng.abs() > 180 || (lat == 0 && lng == 0)) {
+      return null;
     }
+    return LatLng(lat, lng);
   }
 
-  Color _getStatusColor() {
-    switch (_getEffectiveStatusID()) {
-      case 'STAT001':
-        return AppColors.warning;
-
-      case 'STAT002':
-        return primaryBlue;
-
-      case 'STAT003':
-        return AppColors.success;
-
-      case 'STAT004':
-        return AppColors.danger;
-
-      default:
-        return textGrey;
-    }
+  String _getFullTitle() {
+    final title = report['title']?.toString().trim() ?? '';
+    if (title.isNotEmpty) return title;
+    return '${ReportCategoryStyle.of(report).label} Report';
   }
 
   @override
   Widget build(BuildContext context) {
     final imageUrl = _getImageUrl();
-    final statusColor = _getStatusColor();
+    final status = reportStatusOf(report);
+    final point = _getPoint();
+    final description = report['description']?.toString().trim() ?? '';
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -1122,17 +1042,16 @@ class ReportDetailsPage extends StatelessWidget {
         backgroundColor: backgroundColor,
         elevation: 0,
         leading: IconButton(
+          tooltip: 'Back',
           icon: const Icon(Icons.arrow_back, color: darkBlue),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Report Details',
           style: TextStyle(
             color: darkBlue,
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
             fontFamily: appHeadingFontFamily,
           ),
         ),
@@ -1140,134 +1059,134 @@ class ReportDetailsPage extends StatelessWidget {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 30),
+          padding: const EdgeInsets.fromLTRB(20, 6, 20, 30),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ------------------------------------------------
-              // IMAGE
+              // TITLE + STATUS (the title already names the category)
               // ------------------------------------------------
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 230,
-                  child: imageUrl != null
-                      ? Image.network(
-                          imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return _imagePlaceholder();
-                          },
-                        )
-                      : _imagePlaceholder(),
+              Text(
+                _getFullTitle(),
+                style: const TextStyle(
+                  fontSize: 24,
+                  height: 1.2,
+                  fontWeight: FontWeight.w800,
+                  color: darkBlue,
+                  fontFamily: appHeadingFontFamily,
                 ),
               ),
-
-              const SizedBox(height: 20),
-
-              // ------------------------------------------------
-              // STATUS
-              // ------------------------------------------------
+              const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
-                  vertical: 6,
+                  vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.11),
+                  color: status.color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  _getStatusText(),
+                  status.label,
                   style: TextStyle(
-                    color: statusColor,
-                    fontSize: 11,
+                    color: status.color,
+                    fontSize: 12,
                     fontWeight: FontWeight.w800,
                     fontFamily: appHeadingFontFamily,
                   ),
                 ),
               ),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 16),
 
               // ------------------------------------------------
-              // CATEGORY
+              // PHOTO (whole photo, never stretched; tap to enlarge)
               // ------------------------------------------------
-              Text(
-                report['categoryName']?.toString().toUpperCase() ?? 'OTHER',
-                style: const TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 0.6,
-                  fontWeight: FontWeight.w600,
-                  color: textGrey,
-                  fontFamily: appFontFamily,
+              _sectionCard(
+                padding: const EdgeInsets.all(8),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 220,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Container(color: AppColors.surfaceMuted),
+                        if (imageUrl != null)
+                          GestureDetector(
+                            onTap: () => _openPhoto(context, imageUrl),
+                            child: Image.network(
+                              imageUrl,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  _imagePlaceholder(),
+                            ),
+                          )
+                        else
+                          _imagePlaceholder(),
+                        if (imageUrl != null)
+                          Positioned(
+                            left: 10,
+                            bottom: 10,
+                            child: _overlayChip(
+                              Icons.photo_camera_outlined,
+                              'Photo attached',
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
 
-              const SizedBox(height: 6),
+              const SizedBox(height: 18),
 
               // ------------------------------------------------
-              // TITLE
-              // ------------------------------------------------
-              Text(
-                report['title']?.toString() ?? 'Report',
-                style: const TextStyle(
-                  fontSize: 23,
-                  height: 1.25,
-                  fontWeight: FontWeight.w700,
-                  color: darkBlue,
-                  fontFamily: appHeadingFontFamily,
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // ------------------------------------------------
-              // ADDRESS
+              // LOCATION + MAP
               // ------------------------------------------------
               _buildDetailRow(
                 icon: Icons.location_on_outlined,
                 title: 'Location',
-                value: report['address']?.toString() ?? 'Address unavailable',
+                value: report['address']?.toString().trim().isNotEmpty == true
+                    ? report['address'].toString()
+                    : 'Address unavailable',
               ),
+              if (point != null) ...[
+                const SizedBox(height: 12),
+                _buildMapPreview(context, point),
+              ],
 
-              const SizedBox(height: 15),
+              const SizedBox(height: 18),
 
               // ------------------------------------------------
-              // DATE
+              // DATE AND TIME (separate rows)
               // ------------------------------------------------
               _buildDetailRow(
                 icon: Icons.calendar_today_outlined,
-                title: 'Date Reported',
+                title: 'Date reported',
                 value: _formatDate(report['dateReported']?.toString()),
               ),
-
-              const SizedBox(height: 15),
-
-              // ------------------------------------------------
-              // TIME
-              // ------------------------------------------------
+              const SizedBox(height: 14),
               _buildDetailRow(
                 icon: Icons.access_time_outlined,
-                title: 'Time Reported',
+                title: 'Time reported',
                 value: _formatTime(report['dateReported']?.toString()),
               ),
-
-              const SizedBox(height: 15),
 
               // ------------------------------------------------
               // RESOLUTION TIMELINE (only after the admin sets it)
               // ------------------------------------------------
               if (_getAdminTimeline(report) != null) ...[
+                const SizedBox(height: 14),
                 _buildDetailRow(
                   icon: Icons.event_available_outlined,
-                  title: 'Resolution Timeline',
+                  title: 'Resolution timeline',
                   value: _formatTimeline(),
                 ),
-                const SizedBox(height: 25),
-              ] else
-                const SizedBox(height: 10),
+              ],
+
+              const SizedBox(height: 22),
 
               // ------------------------------------------------
               // DESCRIPTION
@@ -1276,36 +1195,28 @@ class ReportDetailsPage extends StatelessWidget {
                 'Description',
                 style: TextStyle(
                   fontSize: 16,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                   color: darkBlue,
                   fontFamily: appHeadingFontFamily,
                 ),
               ),
-
-              const SizedBox(height: 10),
-
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(17),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  border: Border.all(color: AppColors.divider),
-                ),
+              const SizedBox(height: 8),
+              _sectionCard(
+                padding: const EdgeInsets.all(16),
                 child: Text(
-                  (report['description']?.toString().trim().isEmpty ?? true)
+                  description.isEmpty
                       ? 'No description provided.'
-                      : report['description'].toString(),
-                  style: const TextStyle(
-                    fontSize: 13,
+                      : description,
+                  style: TextStyle(
+                    fontSize: 13.5,
                     height: 1.6,
-                    color: textGrey,
+                    color: description.isEmpty ? AppColors.textMuted : darkBlue,
                     fontFamily: appFontFamily,
                   ),
                 ),
               ),
 
-              const SizedBox(height: 25),
+              const SizedBox(height: 22),
 
               // ------------------------------------------------
               // REPORT ID
@@ -1317,7 +1228,7 @@ class ReportDetailsPage extends StatelessWidget {
               ),
 
               // ------------------------------------------------
-              // FEEDBACK (after resolved) + UPDATES & MESSAGES
+              // FEEDBACK (after resolved) + UPDATES
               // ------------------------------------------------
               ReportEngagementSection(
                 userID: userID ?? report['userID']?.toString() ?? '',
@@ -1328,6 +1239,167 @@ class ReportDetailsPage extends StatelessWidget {
 
               const SizedBox(height: 24),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionCard({
+    required Widget child,
+    EdgeInsetsGeometry padding = EdgeInsets.zero,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _overlayChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.ink.withValues(alpha: 0.78),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.white),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              fontFamily: appHeadingFontFamily,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Small map with the report's pin; tap to open a map you can move.
+  Widget _buildMapPreview(BuildContext context, LatLng point) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      child: SizedBox(
+        height: 180,
+        width: double.infinity,
+        child: Stack(
+          children: [
+            _reportMap(point, interactive: false),
+            Positioned.fill(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(onTap: () => _openMap(context, point)),
+              ),
+            ),
+            Positioned(
+              right: 10,
+              bottom: 10,
+              child: IgnorePointer(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: AppShadows.soft,
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.map_outlined, size: 15, color: Colors.white),
+                      SizedBox(width: 5),
+                      Text(
+                        'View map',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: appHeadingFontFamily,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _reportMap(LatLng point, {required bool interactive}) {
+    return FlutterMap(
+      options: MapOptions(
+        initialCenter: point,
+        initialZoom: interactive ? 17 : 16,
+        interactionOptions: InteractionOptions(
+          flags: interactive ? InteractiveFlag.all : InteractiveFlag.none,
+        ),
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.example.citisense',
+        ),
+        MarkerLayer(
+          markers: [
+            Marker(
+              point: point,
+              width: 46,
+              height: 54,
+              alignment: Alignment.topCenter,
+              child: const Icon(
+                Icons.location_on,
+                size: 46,
+                color: AppColors.danger,
+                shadows: [Shadow(color: Colors.black26, blurRadius: 6)],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _openMap(BuildContext context, LatLng point) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('Report location')),
+          body: _reportMap(point, interactive: true),
+        ),
+      ),
+    );
+  }
+
+  void _openPhoto(BuildContext context, String url) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+          ),
+          body: InteractiveViewer(
+            minScale: 1,
+            maxScale: 4,
+            child: Center(child: Image.network(url, fit: BoxFit.contain)),
           ),
         ),
       ),
@@ -1387,10 +1459,23 @@ class ReportDetailsPage extends StatelessWidget {
   }
 
   Widget _imagePlaceholder() {
+    final category = ReportCategoryStyle.of(report);
     return Container(
-      color: AppColors.primarySoft,
-      child: const Center(
-        child: Icon(Icons.image_outlined, size: 55, color: primaryBlue),
+      color: category.softColor,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(category.icon, size: 46, color: category.color),
+          const SizedBox(height: 6),
+          const Text(
+            'No photo attached',
+            style: TextStyle(
+              fontFamily: appFontFamily,
+              fontSize: 12.5,
+              color: textGrey,
+            ),
+          ),
+        ],
       ),
     );
   }

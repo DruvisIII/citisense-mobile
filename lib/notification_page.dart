@@ -379,9 +379,15 @@ class _NotificationPageState extends State<NotificationPage>
   // Same header as Home: same slots, sizes and spacing on every page.
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      padding: const EdgeInsets.fromLTRB(20, CitiPageHeader.topPadding, 20, 0),
       child: CitiPageHeader(
-        barangayName: widget.barangayName,
+        eyebrow: isLoading
+            ? null
+            : unreadCount == 0
+            ? 'All caught up'
+            : unreadCount == 1
+            ? '1 unread'
+            : '$unreadCount unread',
         title: 'Notifications',
         description: 'Stay updated with your reports and announcements.',
         mascot: const CitiMascot(pose: MascotPose.notification, backdrop: true),

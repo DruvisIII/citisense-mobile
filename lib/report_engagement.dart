@@ -314,24 +314,59 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
           const SizedBox(height: 12),
           _buildFeedbackCard(),
         ],
-        const SizedBox(height: 28),
-        Row(
-          children: [
-            Expanded(
-              child: _sectionTitle(
-                'Updates',
-                'Status changes and updates from your barangay.',
+        const SizedBox(height: 24),
+        // One card: a header strip, then the report's status history.
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: AppColors.primaryBorder),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                color: AppColors.primarySoft,
+                padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: const BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.timeline_rounded,
+                        color: Colors.white,
+                        size: 21,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _sectionTitle(
+                        'Updates',
+                        'Status changes from your barangay.',
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Refresh',
+                      onPressed: _loading ? null : _load,
+                      icon: const Icon(
+                        Icons.refresh_rounded,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            IconButton(
-              tooltip: 'Refresh',
-              onPressed: _loading ? null : _load,
-              icon: const Icon(Icons.refresh_rounded, color: AppColors.primary),
-            ),
-          ],
+              _buildThread(),
+            ],
+          ),
         ),
-        const SizedBox(height: 12),
-        _buildThread(),
         const SizedBox(height: 10),
         // Questions about this report are asked in Messages.
         Align(
@@ -393,7 +428,6 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
     if (_loading && _feedback == null) {
       return Container(
         height: 90,
-        decoration: _cardDecoration,
         alignment: Alignment.center,
         child: const CircularProgressIndicator(strokeWidth: 2.4),
       );
@@ -723,7 +757,6 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(16),
-        decoration: _cardDecoration,
         child: Column(
           children: [
             Text(
@@ -775,14 +808,8 @@ class _ReportEngagementSectionState extends State<ReportEngagementSection> {
       );
     }
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.divider),
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
       child: Column(children: rows),
     );
   }

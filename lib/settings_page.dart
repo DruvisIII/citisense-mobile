@@ -227,9 +227,8 @@ class _SettingsPageState extends State<SettingsPage> {
   // Same header as Home: same slots, sizes and spacing on every page.
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      padding: const EdgeInsets.fromLTRB(20, CitiPageHeader.topPadding, 20, 0),
       child: CitiPageHeader(
-        barangayName: widget.barangayName,
         title: 'Settings',
         description: 'Manage your account and app preferences.',
         mascot: const CitiMascot(pose: MascotPose.settings, backdrop: true),
@@ -503,7 +502,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 ? 'Large'
                 : 'Medium';
             const labels = ['Small', 'Medium', 'Large'];
+            // No animation: changing the text size re-lays out the whole
+            // app, so the highlight moves at once with it.
             return SlidingToggle.subtle(
+              animate: false,
               labels: labels,
               selectedIndex: labels.indexOf(selected),
               onChanged: (index) =>
