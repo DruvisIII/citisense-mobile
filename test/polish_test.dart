@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:citisense/api_client.dart';
 import 'package:citisense/app_theme.dart';
+import 'package:citisense/my_reports.dart';
 import 'package:citisense/notification_router.dart';
 import 'package:citisense/ui_components.dart';
 
@@ -10,6 +11,68 @@ import 'package:citisense/ui_components.dart';
 
 void main() {
   tearDown(ServerClock.reset);
+
+  group('report card information', () {
+    test('short location from a full address', () {
+      expect(
+        shortReportAddress(
+          'To-ong Pardo, 7VQ8+JMW To-ong Pardo, Cebu City, '
+          'Central Visayas, Philippines',
+        ),
+        'To-ong Pardo, Cebu City',
+      );
+      expect(
+        shortReportAddress('Sanciangko St, Cebu City'),
+        'Sanciangko St, Cebu City',
+      );
+      expect(shortReportAddress(''), 'Location unavailable');
+    });
+
+    test('category: own icon and color, no "Report" in the name', () {
+      final waste = ReportCategoryStyle.of({
+        'categoryName': 'Waste Accumulation',
+      });
+      final pothole = ReportCategoryStyle.of({'categoryName': 'Pothole'});
+      final other = ReportCategoryStyle.of({'categoryName': 'Others'});
+
+      expect(waste.label, 'Waste Accumulation');
+      expect(pothole.label, 'Pothole');
+      expect(other.label, 'Other Issue');
+      expect({waste.color, pothole.color, other.color}.length, 3);
+      expect({waste.icon, pothole.icon, other.icon}.length, 3);
+    });
+
+    test('status labels follow the current status', () {
+      expect(reportStatusOf({'statusID': 'STAT001'}).label, 'Pending');
+      expect(reportStatusOf({'statusID': 'STAT002'}).label, 'Ongoing');
+      expect(reportStatusOf({'statusID': 'STAT003'}).label, 'Resolved');
+    });
+  });
+
+  testWidgets('Font Size toggle moves at once (no animation)', (tester) async {
+    var selected = 1;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) => SlidingToggle.subtle(
+              animate: false,
+              labels: const ['Small', 'Medium', 'Large'],
+              selectedIndex: selected,
+              onChanged: (i) => setState(() => selected = i),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Large'));
+    await tester.pump();
+    final positioned = tester.widget<AnimatedPositioned>(
+      find.byType(AnimatedPositioned),
+    );
+    expect(positioned.duration, Duration.zero);
+    expect(selected, 2);
+  });
 
   group('relativeTime', () {
     final now = DateTime(2026, 11, 25, 0, 30); // just after midnight
@@ -103,3 +166,7 @@ void main() {
     expect(middle, lessThan(end));
   });
 }
+
+// ------------------------------------------------------------------
+// Report cards, headers and Font Size (items 19-24)
+// ------------------------------------------------------------------
